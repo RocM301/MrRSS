@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -32,16 +34,55 @@ var (
 	ErrInvalidCiphertext = errors.New("invalid ciphertext")
 	// ErrDecryptionFailed is returned when decryption fails
 	ErrDecryptionFailed = errors.New("decryption failed")
+
+	machineIDsOnce sync.Once
+	machineIDs     []string
+	machineIDsErr  error
 )
 
 // GetMachineID generates a machine-specific identifier for key derivation.
 // This ensures that encrypted data is tied to the specific machine.
-// It combines multiple sources of entropy for better security.
+// On macOS it prefers the stable hardware UUID; hostnames are only used as
+// legacy fallbacks because they can change with network conditions.
 func GetMachineID() (string, error) {
+	ids, err := getMachineIDCandidates()
+	if err != nil {
+		return "", err
+	}
+	if len(ids) == 0 {
+		return "", fmt.Errorf("no machine identifiers available")
+	}
+	return ids[0], nil
+}
+
+func getMachineIDCandidates() ([]string, error) {
+	machineIDsOnce.Do(func() {
+		machineIDs = buildMachineIDCandidates()
+		if len(machineIDs) == 0 {
+			machineIDsErr = fmt.Errorf("no machine identifiers available")
+		}
+	})
+	return machineIDs, machineIDsErr
+}
+
+func buildMachineIDCandidates() []string {
+	ids := []string{}
+
+	if runtime.GOOS == "darwin" {
+		if uuid := darwinHardwareUUID(); uuid != "" {
+			ids = append(ids, fmt.Sprintf("darwin-hardware-%s-%s", runtime.GOARCH, uuid))
+		}
+	}
+
+	ids = append(ids, legacyMachineIDs()...)
+	return dedupeNonEmpty(ids)
+}
+
+func legacyMachineIDs() []string {
 	// Use hostname as the primary identifier
 	hostname, err := os.Hostname()
 	if err != nil {
-		return "", fmt.Errorf("failed to get hostname: %w", err)
+		hostname = ""
 	}
 
 	// Try to get machine-id from various system locations (Linux/BSD)
@@ -57,11 +98,60 @@ func GetMachineID() (string, error) {
 		}
 	}
 
-	// Combine multiple sources: hostname, OS, architecture, and machine UUID
-	// This provides better entropy than hostname alone
-	machineID := fmt.Sprintf("%s-%s-%s-%s", hostname, runtime.GOOS, runtime.GOARCH, machineUUID)
+	hostnames := []string{hostname}
+	if runtime.GOOS == "darwin" {
+		if localHostName := darwinScutilValue("LocalHostName"); localHostName != "" {
+			hostnames = append(hostnames, localHostName, localHostName+".local", localHostName+".lan")
+		}
+		hostnames = append(hostnames, darwinScutilValue("HostName"), darwinScutilValue("ComputerName"))
+	}
 
-	return machineID, nil
+	ids := []string{}
+	for _, h := range dedupeNonEmpty(hostnames) {
+		ids = append(ids, fmt.Sprintf("%s-%s-%s-%s", h, runtime.GOOS, runtime.GOARCH, machineUUID))
+	}
+	return ids
+}
+
+func darwinHardwareUUID() string {
+	out, err := exec.Command("/usr/sbin/ioreg", "-rd1", "-c", "IOPlatformExpertDevice").Output()
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, "IOPlatformUUID") {
+			continue
+		}
+		parts := strings.Split(line, "\"")
+		for i, part := range parts {
+			if part == "IOPlatformUUID" && i+2 < len(parts) {
+				return strings.TrimSpace(parts[i+2])
+			}
+		}
+	}
+	return ""
+}
+
+func darwinScutilValue(key string) string {
+	out, err := exec.Command("/usr/sbin/scutil", "--get", key).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func dedupeNonEmpty(values []string) []string {
+	seen := map[string]bool{}
+	result := []string{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	return result
 }
 
 // DeriveKey derives a cryptographic key from a machine ID using PBKDF2.
@@ -78,7 +168,7 @@ func Encrypt(plaintext string) (string, error) {
 		return "", nil
 	}
 
-	// Get machine ID for key derivation
+	// Get the preferred stable machine ID for key derivation.
 	machineID, err := GetMachineID()
 	if err != nil {
 		return "", fmt.Errorf("failed to get machine ID: %w", err)
@@ -152,28 +242,36 @@ func Decrypt(ciphertextBase64 string) (string, error) {
 	// Extract salt
 	salt := data[:saltSize]
 
-	// Get machine ID for key derivation
-	machineID, err := GetMachineID()
+	// Try the preferred stable machine ID first, then legacy hostname-derived
+	// IDs for values encrypted by older versions.
+	machineIDs, err := getMachineIDCandidates()
 	if err != nil {
 		return "", fmt.Errorf("failed to get machine ID: %w", err)
 	}
 
-	// Derive decryption key
+	for _, machineID := range machineIDs {
+		plaintext, err := decryptWithMachineID(machineID, salt, data)
+		if err == nil {
+			return plaintext, nil
+		}
+	}
+
+	return "", ErrDecryptionFailed
+}
+
+func decryptWithMachineID(machineID string, salt, data []byte) (string, error) {
 	key := DeriveKey(machineID, salt)
 
-	// Create AES cipher
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("failed to create cipher: %w", err)
 	}
 
-	// Create GCM mode
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", fmt.Errorf("failed to create GCM: %w", err)
 	}
 
-	// Extract nonce and ciphertext
 	nonceSize := gcm.NonceSize()
 	if len(data) < saltSize+nonceSize {
 		return "", ErrInvalidCiphertext
@@ -182,12 +280,10 @@ func Decrypt(ciphertextBase64 string) (string, error) {
 	nonce := data[saltSize : saltSize+nonceSize]
 	ciphertext := data[saltSize+nonceSize:]
 
-	// Decrypt the ciphertext
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return "", ErrDecryptionFailed
+		return "", err
 	}
-
 	return string(plaintext), nil
 }
 

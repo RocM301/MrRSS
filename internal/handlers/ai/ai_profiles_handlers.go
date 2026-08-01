@@ -102,8 +102,13 @@ func HandleGetAIProfile(h *core.Handler, w http.ResponseWriter, r *http.Request)
 	profile, err := h.DB.GetAIProfile(id)
 	if err != nil {
 		log.Printf("Error getting AI profile: %v", err)
-		response.Error(w, err, http.StatusInternalServerError)
-		return
+		// Fall back to the non-sensitive fields so the user can open the edit
+		// dialog and replace a damaged encrypted API key.
+		profile, err = h.DB.GetAIProfileWithoutKey(id)
+		if err != nil {
+			response.Error(w, err, http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if profile == nil {
@@ -208,14 +213,16 @@ func HandleUpdateAIProfile(h *core.Handler, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Check if profile exists
-	existing, err := h.DB.GetAIProfile(id)
+	// Check if profile exists without decrypting its API key. A previously
+	// saved key may be unreadable after machine/encryption changes, but the user
+	// must still be able to overwrite it with a fresh key.
+	exists, err := h.DB.AIProfileExists(id)
 	if err != nil {
 		log.Printf("Error getting AI profile: %v", err)
 		response.Error(w, err, http.StatusInternalServerError)
 		return
 	}
-	if existing == nil {
+	if !exists {
 		response.Error(w, fmt.Errorf("profile not found"), http.StatusNotFound)
 		return
 	}
@@ -240,25 +247,25 @@ func HandleUpdateAIProfile(h *core.Handler, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// If API key is masked or empty, keep the existing key
-	apiKey := req.APIKey
-	if apiKey == "" || strings.HasPrefix(apiKey, "****") {
-		apiKey = existing.APIKey
-	}
-
 	profile := &models.AIProfile{
 		ID:            id,
 		Name:          req.Name,
-		APIKey:        apiKey,
+		APIKey:        req.APIKey,
 		Endpoint:      req.Endpoint,
 		Model:         req.Model,
 		CustomHeaders: req.CustomHeaders,
 		IsDefault:     req.IsDefault,
 	}
 
-	if err := h.DB.UpdateAIProfile(profile); err != nil {
-		log.Printf("Error updating AI profile: %v", err)
-		response.Error(w, err, http.StatusInternalServerError)
+	var updateErr error
+	if req.APIKey == "" || strings.HasPrefix(req.APIKey, "****") {
+		updateErr = h.DB.UpdateAIProfilePreservingKey(profile)
+	} else {
+		updateErr = h.DB.UpdateAIProfile(profile)
+	}
+	if updateErr != nil {
+		log.Printf("Error updating AI profile: %v", updateErr)
+		response.Error(w, updateErr, http.StatusInternalServerError)
 		return
 	}
 
@@ -388,7 +395,7 @@ func HandleTestAllAIProfiles(h *core.Handler, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	profiles, err := h.DB.GetAllAIProfiles()
+	profiles, err := h.DB.GetAllAIProfilesWithoutKeys()
 	if err != nil {
 		log.Printf("Error listing AI profiles: %v", err)
 		response.Error(w, err, http.StatusInternalServerError)
@@ -408,7 +415,19 @@ func HandleTestAllAIProfiles(h *core.Handler, w http.ResponseWriter, r *http.Req
 		wg.Add(1)
 		go func(idx int, p models.AIProfile) {
 			defer wg.Done()
-			results[idx] = testAIProfileConnection(h, &p)
+			fullProfile, err := h.DB.GetAIProfile(p.ID)
+			if err != nil {
+				results[idx] = ProfileTestResult{
+					ProfileID:         p.ID,
+					ProfileName:       p.Name,
+					ConfigValid:       false,
+					ConnectionSuccess: false,
+					ModelAvailable:    false,
+					ErrorMessage:      fmt.Sprintf("Failed to load AI profile credentials: %v", err),
+				}
+				return
+			}
+			results[idx] = testAIProfileConnection(h, fullProfile)
 		}(i, profile)
 	}
 
@@ -520,8 +539,15 @@ func testAIProfileConnection(h *core.Handler, profile *models.AIProfile) Profile
 
 	client := ai.NewClientWithHTTPClient(clientConfig, httpClient)
 
-	// Try a simple test request
-	_, err = client.Request("", "test")
+	// Try a minimal message request. Some OpenAI-compatible relay endpoints
+	// reject optional sampling/token parameters, so the connectivity test keeps
+	// the payload as small as possible.
+	_, err = client.RequestWithConfig(ai.RequestConfig{
+		Model: profile.Model,
+		Messages: []map[string]string{
+			{"role": "user", "content": "ping"},
+		},
+	})
 
 	if err != nil {
 		result.ConnectionSuccess = false

@@ -49,6 +49,8 @@ build/bin/
 build/dmg/
 build/appimage/
 build/appimagetool-x86_64.AppImage
+build/icon.ico
+build/icons.icns
 dist/
 wailsjs/wailsjs/runtime/
 frontend/bindings/

@@ -67,6 +67,17 @@ describe('useArticleRendering', () => {
       expect(container.innerHTML).toBe(originalHTML);
     });
 
+    it('should not render dollar prices as math formulas', () => {
+      const { renderMathFormulas } = useArticleRendering();
+
+      container.innerHTML = '<p>Apple TV: $199, up from $129 (+$70)</p>';
+      const originalHTML = container.innerHTML;
+      renderMathFormulas(container);
+
+      expect(container.innerHTML).toBe(originalHTML);
+      expect(container.innerHTML).not.toContain('katex-inline');
+    });
+
     it('should handle mixed content with both inline and display math', () => {
       const { renderMathFormulas } = useArticleRendering();
 

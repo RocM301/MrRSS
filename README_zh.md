@@ -15,7 +15,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue.js-3.5+-4FC08D?logo=vue.js)](https://vuejs.org/)
 
 > [!NOTE]
-> **本仓库是 [WCY-dt/MrRSS](https://github.com/WCY-dt/MrRSS) 的修改版（fork）**，维护于 [xpdigital/MrRSS](https://github.com/xpdigital/MrRSS)，沿用相同的 GPL-3.0 协议。
+> **本仓库是 [WCY-dt/MrRSS](https://github.com/WCY-dt/MrRSS) 的修改版（fork）**，维护于 [RocM301/MrRSS](https://github.com/RocM301/MrRSS)，沿用相同的 GPL-3.0 协议。
 >
 > **关于维护者：** XP 并非程序员，只是一名 YouTuber（[@XiaoPengTech](https://www.youtube.com/@XiaoPengTech)），纯属编译好玩。因此请勿期待专业级的支持，issue 和 PR 可能无法及时回复。
 >
@@ -31,14 +31,14 @@
 > - 🐛 文章内容被缓存清理删除时给出友好提示，不再抛出原始 SQL 错误
 > - 🐛 修复代理图片下载文件名变成 `proxy.*` 的问题
 >
-> 完整改动见[提交历史](https://github.com/xpdigital/MrRSS/commits/main)。
+> 完整改动见[提交历史](https://github.com/RocM301/MrRSS/commits/main)。
 
 ## 🐳 Docker 一键部署（手机 / 自部署）
 
 在群晖 NAS 或任意装了 Docker 的机器上跑无头服务端，然后用任意浏览器（含手机）阅读订阅。已发布预构建的多架构镜像（amd64/arm64）到 GitHub 镜像仓库：
 
 ```bash
-docker run -d --name mrrss -p 1234:1234 -v mrrss-data:/app/data --restart unless-stopped ghcr.io/xpdigital/mrrss:latest
+docker run -d --name mrrss -p 1234:1234 -v mrrss-data:/app/data --restart unless-stopped ghcr.io/rocm301/mrrss:latest
 ```
 
 然后浏览器打开 `http://你的服务器IP:1234`。数据存在 `mrrss-data` 卷里，更新容器不丢。想配合本地翻译，自部署 [MTranServer](https://github.com/xxnuo/MTranServer) 后在 设置 → 内容 → 翻译 里填它的地址即可。
@@ -256,7 +256,7 @@ go build -tags server -o mrrss-server .
 本 fork 提供了预构建的多架构（amd64/arm64）服务器镜像，发布在 ghcr.io：
 
 ```bash
-docker run -d --name mrrss -p 1234:1234 -v mrrss-data:/app/data --restart unless-stopped ghcr.io/xpdigital/mrrss:latest
+docker run -d --name mrrss -p 1234:1234 -v mrrss-data:/app/data --restart unless-stopped ghcr.io/rocm301/mrrss:latest
 ```
 
 请参阅[服务器模式 API 文档](docs/SERVER_MODE/swagger.json)以获取完整的 API 参考。

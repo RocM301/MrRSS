@@ -172,6 +172,21 @@ func TestGetMachineID(t *testing.T) {
 	}
 }
 
+func TestMachineIDCandidatesAreStableAndNonEmpty(t *testing.T) {
+	ids, err := getMachineIDCandidates()
+	if err != nil {
+		t.Fatalf("getMachineIDCandidates() error = %v", err)
+	}
+	if len(ids) == 0 {
+		t.Fatalf("expected at least one machine ID candidate")
+	}
+	for i, id := range ids {
+		if strings.TrimSpace(id) == "" {
+			t.Fatalf("candidate %d is empty", i)
+		}
+	}
+}
+
 func TestDeriveKey(t *testing.T) {
 	machineID := "test-machine-linux-amd64"
 	salt := []byte("1234567890123456") // 16 bytes

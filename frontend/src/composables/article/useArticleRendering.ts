@@ -173,8 +173,8 @@ export function useArticleRendering() {
           { regex: /\\\[([^\]]+)\\\]/g, isDisplay: true },
           // Inline math: \(...\)
           { regex: /\\\(([^)]+)\\\)/g, isDisplay: false },
-          // Inline math: $...$ (single line, not empty, not starting/ending with space)
-          { regex: /\$([^\s$][^$\n]*[^\s$]|\S)\$/g, isDisplay: false },
+          // Inline math: $...$ (single line, not empty, not currency like $199)
+          { regex: /\$(?![+-]?\d)([^\s$][^$\n]*[^\s$]|\S)\$/g, isDisplay: false },
         ];
 
         // Collect all matches with their positions

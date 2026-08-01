@@ -15,7 +15,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue.js-3.5+-4FC08D?logo=vue.js)](https://vuejs.org/)
 
 > [!NOTE]
-> **This is a modified fork** of [WCY-dt/MrRSS](https://github.com/WCY-dt/MrRSS), maintained at [xpdigital/MrRSS](https://github.com/xpdigital/MrRSS) and licensed under the same GPL-3.0 license.
+> **This is a modified fork** of [WCY-dt/MrRSS](https://github.com/WCY-dt/MrRSS), maintained at [RocM301/MrRSS](https://github.com/RocM301/MrRSS) and licensed under the same GPL-3.0 license.
 >
 > **About the maintainer:** XP is not a programmer — just a YouTuber ([@XiaoPengTech](https://www.youtube.com/@XiaoPengTech)) who builds this for fun. So please don't expect professional-grade support; issues and PRs may not get a timely response.
 >
@@ -31,14 +31,14 @@
 > - 🐛 Friendly message instead of a raw SQL error when article content was removed by cache cleanup
 > - 🐛 Proxied images now download with their real filenames instead of `proxy.*`
 >
-> See the [commit history](https://github.com/xpdigital/MrRSS/commits/main) for full details.
+> See the [commit history](https://github.com/RocM301/MrRSS/commits/main) for full details.
 
 ## 🐳 One-line Docker deploy (mobile / self-hosted)
 
 Run the headless server on a NAS or any machine with Docker, then read your feeds from any browser (phone included). Pre-built multi-arch images (amd64/arm64) are published to GitHub Container Registry:
 
 ```bash
-docker run -d --name mrrss -p 1234:1234 -v mrrss-data:/app/data --restart unless-stopped ghcr.io/xpdigital/mrrss:latest
+docker run -d --name mrrss -p 1234:1234 -v mrrss-data:/app/data --restart unless-stopped ghcr.io/rocm301/mrrss:latest
 ```
 
 Then open `http://<your-server-ip>:1234`. Data is kept in the `mrrss-data` volume and survives upgrades. To pair it with the local translation feature, run [MTranServer](https://github.com/xxnuo/MTranServer) and set its address in Settings → Content → Translation.
@@ -256,7 +256,7 @@ go build -tags server -o mrrss-server .
 Pre-built multi-arch (amd64/arm64) server images for this fork are published to ghcr.io:
 
 ```bash
-docker run -d --name mrrss -p 1234:1234 -v mrrss-data:/app/data --restart unless-stopped ghcr.io/xpdigital/mrrss:latest
+docker run -d --name mrrss -p 1234:1234 -v mrrss-data:/app/data --restart unless-stopped ghcr.io/rocm301/mrrss:latest
 ```
 
 Please refer to the [Server Mode API Documentation](docs/SERVER_MODE/swagger.json) for a complete API reference.

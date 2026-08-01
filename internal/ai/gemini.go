@@ -236,7 +236,9 @@ func DetectAPIProvider(endpoint string) string {
 
 	// OpenAI-compatible endpoints (default)
 	if strings.Contains(endpoint, "openai.com") ||
-		strings.Contains(endpoint, "api.openai.com") {
+		strings.Contains(endpoint, "api.openai.com") ||
+		strings.Contains(endpoint, "/chat/completions") ||
+		strings.Contains(endpoint, "/v1/responses") {
 		return "openai"
 	}
 

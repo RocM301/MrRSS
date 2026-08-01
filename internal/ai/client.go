@@ -86,6 +86,7 @@ func (c *Client) RequestWithMessages(messages []map[string]string) (ResponseResu
 // RequestWithConfig makes an AI request with full configuration
 func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error) {
 	provider := DetectAPIProvider(c.config.Endpoint)
+	var lastErr error
 
 	// Try provider-specific format first based on endpoint detection
 	switch provider {
@@ -94,6 +95,7 @@ func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error)
 		if err == nil {
 			return result, nil
 		}
+		lastErr = err
 		// Fall through to other formats
 
 	case "anthropic":
@@ -101,6 +103,7 @@ func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error)
 		if err == nil {
 			return result, nil
 		}
+		lastErr = err
 		// Fall through to other formats
 
 	case "deepseek":
@@ -108,6 +111,7 @@ func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error)
 		if err == nil {
 			return result, nil
 		}
+		lastErr = err
 		// Fall through to other formats
 
 	case "ollama":
@@ -115,6 +119,7 @@ func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error)
 		if err == nil {
 			return result, nil
 		}
+		lastErr = err
 		// Fall through to other formats
 	}
 
@@ -123,6 +128,11 @@ func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error)
 	if err == nil {
 		return result, nil
 	}
+	lastErr = err
+
+	if provider == "openai" {
+		return ResponseResult{}, fmt.Errorf("openai-compatible request failed: %w", lastErr)
+	}
 
 	// Try other formats as fallback
 	if provider != "gemini" {
@@ -130,6 +140,7 @@ func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error)
 		if err == nil {
 			return result, nil
 		}
+		lastErr = err
 	}
 
 	if provider != "ollama" {
@@ -137,10 +148,11 @@ func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error)
 		if err == nil {
 			return result, nil
 		}
+		lastErr = err
 	}
 
 	// All formats failed
-	return ResponseResult{}, fmt.Errorf("all API formats failed")
+	return ResponseResult{}, fmt.Errorf("all API formats failed; last error: %w", lastErr)
 }
 
 // maxTransientRetries is how many extra attempts a single format gets when it
@@ -158,7 +170,44 @@ type transientStatusError struct {
 }
 
 func (e *transientStatusError) Error() string {
-	return fmt.Sprintf("transient upstream status %d: %s", e.status, e.body)
+	detail := readableAPIErrorDetail(e.body)
+	if detail == "" {
+		detail = "empty response body"
+	}
+
+	switch e.status {
+	case http.StatusTooManyRequests:
+		return fmt.Sprintf("upstream rate limited the request (HTTP 429): %s", detail)
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return fmt.Sprintf("upstream service temporarily unavailable (HTTP %d): %s", e.status, detail)
+	default:
+		return fmt.Sprintf("upstream server error (HTTP %d): %s", e.status, detail)
+	}
+}
+
+func readableAPIErrorDetail(body string) string {
+	text := strings.TrimSpace(body)
+	if text == "" {
+		return ""
+	}
+
+	var response struct {
+		Error *struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(text), &response); err == nil && response.Error != nil {
+		message := strings.TrimSpace(response.Error.Message)
+		if message != "" {
+			if response.Error.Type != "" {
+				return fmt.Sprintf("%s (type: %s)", message, response.Error.Type)
+			}
+			return message
+		}
+	}
+
+	return text
 }
 
 // isTransient reports whether an error from a single attempt is transient and
@@ -350,7 +399,21 @@ func parseCustomHeaders(headersJSON string) (map[string]string, error) {
 
 	var headers map[string]string
 	if err := json.Unmarshal([]byte(headersJSON), &headers); err != nil {
-		return nil, fmt.Errorf("failed to parse custom headers JSON: %w", err)
+		var pairs []struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		}
+		if pairErr := json.Unmarshal([]byte(headersJSON), &pairs); pairErr != nil {
+			return nil, fmt.Errorf("failed to parse custom headers JSON: %w", err)
+		}
+
+		headers = make(map[string]string, len(pairs))
+		for _, pair := range pairs {
+			key := strings.TrimSpace(pair.Key)
+			if key != "" {
+				headers[key] = pair.Value
+			}
+		}
 	}
 	return headers, nil
 }

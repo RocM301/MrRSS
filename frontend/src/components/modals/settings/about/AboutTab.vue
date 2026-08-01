@@ -74,11 +74,11 @@ function handleDownloadInstall() {
 }
 
 function openGitHubRepo() {
-  openInBrowser('https://github.com/xpdigital/MrRSS');
+  openInBrowser('https://github.com/RocM301/MrRSS');
 }
 
 function openGitHubRelease() {
-  openInBrowser('https://github.com/xpdigital/MrRSS/releases/latest');
+  openInBrowser('https://github.com/RocM301/MrRSS/releases/latest');
 }
 </script>
 

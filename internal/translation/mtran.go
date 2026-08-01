@@ -92,6 +92,13 @@ func (t *MTranTranslator) Translate(text, targetLang string) (string, error) {
 		return text, nil
 	}
 
+	// MTranServer's NMT model often rewrites compact price-comparison snippets
+	// like "$1,299, up from $1,099" into "1299美元，高于1099美元". Handle that
+	// common RSS-list pattern deterministically so prices stay readable.
+	if translated, ok := translateMTranPriceChange(text, to); ok {
+		return polishMTranTranslation(text, translated, to), nil
+	}
+
 	// Protect brand names so the model can't translate them (e.g. "Apple" ->
 	// "苹果"). Each brand is swapped for an opaque placeholder before
 	// translation and restored afterwards.
@@ -134,8 +141,38 @@ func (t *MTranTranslator) Translate(text, targetLang string) (string, error) {
 		return "", fmt.Errorf("failed to decode MTranServer response: %w", err)
 	}
 
-	// Restore the original brand names in place of the placeholders.
-	return restore(result.Result), nil
+	// Restore the original brand names in place of the placeholders, then apply
+	// a small news-title polish layer for the awkward phrases MTran commonly
+	// emits around protected product names and tech terms.
+	return polishMTranTranslation(text, restore(result.Result), to), nil
+}
+
+var priceChangeRegexp = regexp.MustCompile(`^\s*([^:\n]+?)\s*:\s*(\$[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)\s*,?\s*(?i:(up|down)\s+from)\s*(\$[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)(?:\s*\([+-]?\$[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?\))?\s*$`)
+
+func translateMTranPriceChange(text, targetLang string) (string, bool) {
+	if targetLang != "zh" {
+		return "", false
+	}
+
+	matches := priceChangeRegexp.FindStringSubmatch(text)
+	if matches == nil {
+		return "", false
+	}
+
+	product := strings.TrimSpace(matches[1])
+	currentPrice := matches[2]
+	direction := strings.ToLower(matches[3])
+	previousPrice := matches[4]
+	if product == "" || currentPrice == "" || previousPrice == "" {
+		return "", false
+	}
+
+	verb := "上调至"
+	if direction == "down" {
+		verb = "下调至"
+	}
+
+	return fmt.Sprintf("%s：由 %s %s %s", product, previousPrice, verb, currentPrice), true
 }
 
 // protectedBrands lists English brand/product names that should always be kept
@@ -143,13 +180,98 @@ func (t *MTranTranslator) Translate(text, targetLang string) (string, error) {
 // words. Order matters: longer, more specific names come before shorter ones
 // (e.g. "Apple Watch" before "Apple") so the more specific match wins.
 var protectedBrands = []string{
-	"Apple Watch", "Apple TV", "Apple Music", "Apple Vision Pro", "Apple",
-	"Google Pixel", "Google", "Microsoft", "Amazon", "Meta", "Tesla",
+	// Multi-word product names MUST come before their shorter prefixes so the
+	// whole name is protected as a single unit. Otherwise only the prefix is
+	// protected and the trailing word gets translated on its own
+	// ("MacBook Air" -> "MacBook 空气", "Mac Studio" -> "Mac 工作室").
+	"Apple Vision Pro", "Apple Watch Ultra", "Apple Watch Series", "Apple Watch SE", "Apple Watch",
+	"Apple TV", "Apple Music", "Apple Intelligence", "Apple Podcasts", "Apple News", "Apple Store",
+	"Apple Pencil", "Apple Pay", "Apple Card", "Apple Arcade",
+	"MacBook Air", "MacBook Pro", "MacBook Neo", "MacBook", "Mac Studio", "Mac Pro", "Mac mini", "Mac",
+	"iPad Air", "iPad Pro", "iPad mini", "iPad", "iMac",
+	"Vision Pro", "HomePod mini", "HomePod",
+	"AirPods Max", "AirPods Pro", "AirPods", "AirTag", "Magic Keyboard", "Magic Mouse",
+	"iPhone", "Apple",
+	"Prime Day", "App Store", "Play Store", "Google TV", "Google Pixel", "Pixel", "Google",
+	"Microsoft", "Amazon", "Meta", "Tesla",
 	"OpenAI", "ChatGPT", "Claude", "Anthropic", "Gemini", "Nvidia", "AMD", "Intel",
-	"iPhone", "iPad", "iPadOS", "iOS", "macOS", "watchOS", "tvOS", "visionOS", "Mac", "MacBook", "AirPods", "Siri",
-	"Android", "Pixel", "Chrome", "ChromeOS", "Windows", "Surface", "Xbox", "Copilot",
-	"GitHub", "GitLab", "Slack", "Notion", "Figma", "Spotify", "Netflix", "YouTube", "TikTok",
+	"iPadOS", "iOS", "macOS", "watchOS", "tvOS", "visionOS", "Siri",
+	"Android", "Chrome", "ChromeOS", "Windows", "Surface", "Xbox", "Copilot",
+	"Shortcuts", "Touch ID", "Face ID", "Final Cut Pro", "Logic Pro", "TestFlight",
+	"Thunderbolt 5", "Thunderbolt", "USB-C", "Wi-Fi", "OLED", "SSD", "MSRP", "VPN", "GTA VI",
+	"Macworld", "SanDisk", "LaCie", "Anker", "Belkin", "UGREEN", "Riot", "flowkey",
+	"YouTube Shorts", "Shorts", "9to5Mac Overtime", "9to5Mac", "GitHub", "GitLab", "Slack", "Notion", "Figma", "Spotify", "Netflix", "YouTube", "TikTok",
 	"DeepSeek", "Qwen", "Llama", "Mistral", "Nintendo", "Switch", "PlayStation", "Sony", "Samsung", "Galaxy", "Huawei", "Xiaomi",
+}
+
+var (
+	mtranSpacesRegexp                 = regexp.MustCompile(`[ \t]{2,}`)
+	mtranSpaceBeforeCJKPunctRegexp    = regexp.MustCompile(`[ \t]+([，。！？；：）】])`)
+	mtranSpaceAfterOpeningPunctRegexp = regexp.MustCompile(`([（【])[ \t]+`)
+	mtranStandaloneIARegexp           = regexp.MustCompile(`(^|[^A-Za-z0-9])IA([^A-Za-z0-9]|$)`)
+	protectedVersionedTermRegexps     = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\b(?:iOS|iPadOS|macOS|watchOS|tvOS|visionOS)\s+[A-Za-z0-9.]+(?:['’]s)?\b`),
+		regexp.MustCompile(`(?i)\b(?:Apple Watch Series|Apple Watch SE|Apple Watch Ultra|AirPods Max|MacBook Neo|HomePod mini)\s+[0-9]+(?:['’]s)?\b`),
+	}
+)
+
+func polishMTranTranslation(source, translated, targetLang string) string {
+	polished := strings.TrimSpace(translated)
+	if targetLang != "zh" || polished == "" {
+		return polished
+	}
+
+	polished = normalizeMTranTitlePunctuation(polished)
+	polished = fixMTranCommonTerms(source, polished)
+	polished = normalizeMTranTitlePunctuation(polished)
+	return polished
+}
+
+func normalizeMTranTitlePunctuation(text string) string {
+	text = strings.TrimSpace(text)
+	if !strings.Contains(text, "://") {
+		text = strings.NewReplacer(
+			":", "：",
+			"?", "？",
+			"!", "！",
+		).Replace(text)
+	}
+	text = mtranSpaceBeforeCJKPunctRegexp.ReplaceAllString(text, "$1")
+	text = mtranSpaceAfterOpeningPunctRegexp.ReplaceAllString(text, "$1")
+	text = mtranSpacesRegexp.ReplaceAllString(text, " ")
+	return strings.TrimSpace(text)
+}
+
+func fixMTranCommonTerms(source, translated string) string {
+	out := mtranStandaloneIARegexp.ReplaceAllString(translated, "${1}AI${2}")
+
+	if strings.Contains(source, "Prime Day") {
+		out = strings.NewReplacer(
+			"Prime会员日", "Prime Day",
+			"Prime 会员日", "Prime Day",
+			"黄金会员日", "Prime Day",
+		).Replace(out)
+	}
+
+	if strings.Contains(source, "Shortcuts") {
+		out = strings.ReplaceAll(out, "捷径", "Shortcuts")
+	}
+
+	if strings.Contains(source, "App Store") {
+		out = strings.ReplaceAll(out, "应用商店", "App Store")
+	}
+	if strings.Contains(source, "Play Store") {
+		out = strings.ReplaceAll(out, "Play 商店", "Play Store")
+	}
+	if strings.Contains(source, "Apple Watch Series") {
+		out = regexp.MustCompile(`Apple Watch 第([0-9]+)季`).ReplaceAllString(out, "Apple Watch Series $1")
+	}
+
+	if strings.Contains(source, "Save") || strings.Contains(source, "save") {
+		out = strings.ReplaceAll(out, "保存", "省下")
+	}
+
+	return out
 }
 
 // brandRegexpCache memoizes the compiled whole-word, case-insensitive regexp
@@ -172,29 +294,27 @@ func brandWordRegexp(brand string) *regexp.Regexp {
 	// product names so "Apple Watch" also catches "Apple Watches" and "iPad"
 	// catches "iPads" — otherwise the plural's "...es"/"...s" tail gets
 	// translated on its own ("Apple Watches" -> "Apple 观看"). The matched text
-	// (including any plural suffix) is preserved verbatim on restore.
+	// (including any plural or possessive suffix) is preserved verbatim on
+	// restore.
 	// Brand names are ASCII and only pure-English text reaches this point, so
 	// ASCII word boundaries are sufficient.
-	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(brand) + `(?:es|s)?\b`)
+	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(brand) + `(?:es|s)?(?:['’]s)?\b`)
 	brandRegexpCache[brand] = re
 	return re
 }
 
 // brandPlaceholder builds the opaque token used to stand in for a brand during
-// translation. "BRND" is a distinctive core unlikely to appear in real text;
-// the @@ wrappers help set it apart. Note the NMT model sometimes alters the
-// wrapper (e.g. dropping an @), which is why restoreBrandsRegexp is tolerant.
+// translation. Brace-wrapped placeholders are preserved more reliably by
+// MTranServer than punctuation-heavy tokens such as "@@BRND0@@".
 func brandPlaceholder(i int) string {
-	return fmt.Sprintf("@@BRND%d@@", i)
+	return fmt.Sprintf("{BRAND%d}", i)
 }
 
 // restoreBrandsRegexp matches a (possibly model-mangled) brand placeholder and
-// captures its index. It tolerates a varying number of @ wrappers, spaces the
-// model may insert anywhere inside the token, and case changes — so
-// "@@BRND1@@", "@BRND1@@", "@@ BRND 1 @@", "brnd1" all match and restore.
-// Only single spaces are consumed (not arbitrary whitespace) to avoid eating
-// meaningful gaps between words.
-var restoreBrandsRegexp = regexp.MustCompile(`(?i)@*[ ]?BRND[ ]*(\d+)[ ]?@*`)
+// captures its index. MTranServer may alter wrappers ("{BRAND0}" -> "#BRAND0}",
+// "[BRAND0]", "(BRAND0}", or legacy "@@BRND0@@"), so the wrapper is treated as
+// disposable while the BRAND/BRND core and numeric index are restored.
+var restoreBrandsRegexp = regexp.MustCompile(`(?i)[#@\{\[\(（"“'‘]*[ ]?BR(?:AND|ND)[ ]*(\d+)[ ]*[#@\}\]\)）"”'’]*`)
 
 // protectBrands replaces known brand names in text with placeholders and
 // returns the protected text plus a restore function that swaps the original
@@ -204,6 +324,11 @@ func protectBrands(text string) (string, func(string) string) {
 
 	protected := text
 	idx := 0
+
+	for _, re := range protectedVersionedTermRegexps {
+		protected = protectRegexpMatches(protected, re, originalByIdx, &idx)
+	}
+
 	for _, brand := range protectedBrands {
 		re := brandWordRegexp(brand)
 		loc := re.FindStringIndex(protected)
@@ -248,6 +373,15 @@ func protectBrands(text string) (string, func(string) string) {
 		return s
 	}
 	return protected, restore
+}
+
+func protectRegexpMatches(text string, re *regexp.Regexp, originalByIdx map[int]string, idx *int) string {
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		i := *idx
+		*idx = i + 1
+		originalByIdx[i] = match
+		return brandPlaceholder(i)
+	})
 }
 
 // containsChinese reports whether text contains any Chinese (Han) character.

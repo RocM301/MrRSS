@@ -133,14 +133,43 @@ func (h *OpenAIHandler) ValidateResponse(statusCode int, body []byte) error {
 	case http.StatusOK:
 		return nil
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return fmt.Errorf("authentication failed - check API key")
+		return fmt.Errorf("authentication failed - check API key: %s", openAIErrorBody(body))
 	case http.StatusNotFound:
-		return fmt.Errorf("model not found")
+		return fmt.Errorf("model or endpoint not found: %s", openAIErrorBody(body))
 	case http.StatusBadRequest:
-		return fmt.Errorf("bad request - check parameters")
+		return fmt.Errorf("bad request - check parameters: %s", openAIErrorBody(body))
 	default:
-		return fmt.Errorf("OpenAI API returned status %d: %s", statusCode, string(body))
+		return fmt.Errorf("OpenAI API returned status %d: %s", statusCode, openAIErrorBody(body))
 	}
+}
+
+func openAIErrorBody(body []byte) string {
+	text := strings.TrimSpace(string(body))
+	if text == "" {
+		return "empty response body"
+	}
+
+	var response struct {
+		Error *struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+			Code    any    `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &response); err == nil && response.Error != nil {
+		message := strings.TrimSpace(response.Error.Message)
+		if message != "" {
+			if response.Error.Type != "" {
+				return fmt.Sprintf("%s (type: %s)", message, response.Error.Type)
+			}
+			return message
+		}
+	}
+
+	if len(text) > 500 {
+		return text[:500] + "..."
+	}
+	return text
 }
 
 // FormatEndpoint returns the endpoint as-is for OpenAI format

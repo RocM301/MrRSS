@@ -42,7 +42,7 @@ func HandleDownloadUpdate(h *core.Handler, w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate download URL is from this fork's GitHub repository releases
-	const allowedURLPrefix = "https://github.com/xpdigital/MrRSS/releases/download/"
+	const allowedURLPrefix = "https://github.com/RocM301/MrRSS/releases/download/"
 	if !strings.HasPrefix(req.DownloadURL, allowedURLPrefix) {
 		log.Printf("Invalid download URL attempted: %s", req.DownloadURL)
 		response.Error(w, fmt.Errorf("invalid download URL"), http.StatusBadRequest)

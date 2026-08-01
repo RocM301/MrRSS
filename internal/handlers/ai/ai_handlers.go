@@ -117,8 +117,15 @@ func HandleTestAIConfig(h *core.Handler, w http.ResponseWriter, r *http.Request)
 	}
 	client := ai.NewClientWithHTTPClient(clientConfig, httpClient)
 
-	// Try a simple test request
-	_, err = client.Request("", "test")
+	// Try a minimal message request. Some OpenAI-compatible relay endpoints
+	// reject optional sampling/token parameters, so the connectivity test keeps
+	// the payload as small as possible.
+	_, err = client.RequestWithConfig(ai.RequestConfig{
+		Model: model,
+		Messages: []map[string]string{
+			{"role": "user", "content": "ping"},
+		},
+	})
 
 	if err != nil {
 		result.ConnectionSuccess = false
