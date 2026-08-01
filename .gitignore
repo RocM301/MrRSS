@@ -49,6 +49,7 @@ build/bin/
 build/dmg/
 build/appimage/
 build/appimagetool-x86_64.AppImage
+build/release-stage/
 build/icon.ico
 build/icons.icns
 dist/

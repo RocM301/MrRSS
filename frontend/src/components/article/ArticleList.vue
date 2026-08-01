@@ -41,6 +41,7 @@ const showFilterModal = ref(false);
 const isRefreshing = ref(false);
 const savedScrollTop = ref(0);
 const showRefreshTooltip = ref(false);
+const isListScrolling = ref(false);
 // Track articles that should be temporarily kept in list even if read
 const temporarilyKeepArticles = ref<Set<number>>(new Set());
 // Flag to control when scroll position should be restored
@@ -302,6 +303,10 @@ onBeforeUnmount(() => {
     clearTimeout(scrollThrottleTimer);
     scrollThrottleTimer = null;
   }
+  if (scrollbarVisibilityTimer) {
+    clearTimeout(scrollbarVisibilityTimer);
+    scrollbarVisibilityTimer = null;
+  }
   window.removeEventListener(
     'translation-settings-changed',
     onTranslationSettingsChanged as EventListener
@@ -456,10 +461,20 @@ function selectArticle(article: Article): void {
 
 // Scrolling handler with throttling to improve performance
 let scrollThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+let scrollbarVisibilityTimer: ReturnType<typeof setTimeout> | null = null;
 const SCROLL_THROTTLE_DELAY = 200; // 200ms throttle
 const SCROLL_THRESHOLD = 400; // Increased from 200 to 400 for better UX
 
 function handleScroll(e: Event): void {
+  isListScrolling.value = true;
+  if (scrollbarVisibilityTimer) {
+    clearTimeout(scrollbarVisibilityTimer);
+  }
+  scrollbarVisibilityTimer = setTimeout(() => {
+    isListScrolling.value = false;
+    scrollbarVisibilityTimer = null;
+  }, 900);
+
   // Throttle scroll events to improve performance
   if (scrollThrottleTimer) return;
 
@@ -977,7 +992,11 @@ async function markAllVisibleAsRead(): Promise<void> {
       @clear="handleAISearchClear"
     />
 
-    <div ref="listRef" class="flex-1 overflow-y-scroll article-list-scroll" @scroll="handleScroll">
+    <div
+      ref="listRef"
+      :class="['flex-1 overflow-y-scroll article-list-scroll', { 'is-scrolling': isListScrolling }]"
+      @scroll="handleScroll"
+    >
       <!-- New articles banner: shown when a background refresh found new
            articles while the user was reading. Clicking it loads them. -->
       <Transition name="new-articles-fade">
@@ -1179,6 +1198,24 @@ async function markAllVisibleAsRead(): Promise<void> {
   overflow-anchor: none;
   /* Smooth scrolling behavior */
   scroll-behavior: auto;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.18s ease;
+}
+
+.article-list-scroll.is-scrolling {
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.article-list-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+.article-list-scroll.is-scrolling::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+}
+
+.article-list-scroll.is-scrolling::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-secondary);
 }
 
 .article-list {
