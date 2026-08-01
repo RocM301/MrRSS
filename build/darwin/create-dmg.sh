@@ -45,6 +45,13 @@ mkdir -p "${DMG_DIR}"
 echo "Copying application..."
 cp -R "${APP_PATH}" "${DMG_DIR}/"
 
+# Ad-hoc sign the full app bundle before packaging. Safari/quarantine can mark
+# unsigned or partially signed bundles as damaged, even when the binary itself
+# has a linker-generated ad-hoc signature.
+echo "Applying ad-hoc signature..."
+codesign --force --deep --sign - "${DMG_DIR}/${APP_NAME}.app"
+codesign --verify --deep --strict --verbose=2 "${DMG_DIR}/${APP_NAME}.app"
+
 # Create Applications symlink
 echo "Creating Applications symlink..."
 ln -s /Applications "${DMG_DIR}/Applications"

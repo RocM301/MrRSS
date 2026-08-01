@@ -72,9 +72,9 @@ tasks:
           <key>CFBundlePackageType</key>
           <string>APPL</string>
           <key>CFBundleShortVersionString</key>
-          <string>1.3.23</string>
+          <string>1.3.23-mod.5</string>
           <key>CFBundleVersion</key>
-          <string>1.3.23</string>
+          <string>1.3.23-mod.5</string>
           <key>LSMinimumSystemVersion</key>
           <string>10.13</string>
           <key>NSHighResolutionCapable</key>
@@ -101,6 +101,8 @@ tasks:
         </dict>
         </plist>
         EOF
+      - codesign --force --deep --sign - {{.BIN_DIR}}/{{.APP_NAME}}.app
+      - codesign --verify --deep --strict --verbose=2 {{.BIN_DIR}}/{{.APP_NAME}}.app
 
   package:
     summary: Packages the application into a DMG
