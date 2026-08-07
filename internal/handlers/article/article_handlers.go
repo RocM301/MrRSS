@@ -172,7 +172,7 @@ func HandleFilteredArticles(h *core.Handler, w http.ResponseWriter, r *http.Requ
 	// Get all articles from database
 	// Note: Using a high limit to fetch all articles for filtering
 	// For very large datasets, consider implementing database-level filtering
-	articles, err := h.DB.GetArticles("", 0, "", showHidden, 50000, 0)
+	articles, err := h.DB.GetArticlesWithSearch("", 0, "", showHidden, req.SearchQuery, 50000, 0)
 	if err != nil {
 		response.Error(w, err, http.StatusInternalServerError)
 		return

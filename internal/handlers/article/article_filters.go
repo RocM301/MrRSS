@@ -23,9 +23,10 @@ type FilterCondition struct {
 
 // FilterRequest represents the request body for filtered articles
 type FilterRequest struct {
-	Conditions []FilterCondition `json:"conditions"`
-	Page       int               `json:"page"`
-	Limit      int               `json:"limit"`
+	Conditions  []FilterCondition `json:"conditions"`
+	SearchQuery string            `json:"search_query"`
+	Page        int               `json:"page"`
+	Limit       int               `json:"limit"`
 }
 
 // FilterResponse represents the response for filtered articles with pagination info

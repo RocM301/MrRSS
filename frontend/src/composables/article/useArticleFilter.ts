@@ -46,6 +46,7 @@ export function useArticleFilter() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conditions: filters,
+          search_query: store.searchQuery.trim(),
           page: page,
           limit: 50,
         }),

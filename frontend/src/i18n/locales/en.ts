@@ -92,6 +92,12 @@ const en: TranslationMessages = {
       markAllVisibleAsRead: 'Mark All Visible as Read',
       allArticlesLoaded: 'All articles loaded',
     },
+    search: {
+      button: 'Search Articles',
+      buttonTitle: 'Search articles',
+      noResults: 'No matching articles found',
+      placeholder: 'Search articles...',
+    },
     navigation: {
       goToAllArticles: 'Go to All Articles',
       goToFavorites: 'Go to Favorites',

@@ -28,6 +28,7 @@ func HandleArticles(h *core.Handler, w http.ResponseWriter, r *http.Request) {
 	feedIDStr := r.URL.Query().Get("feed_id")
 	pageStr := r.URL.Query().Get("page")
 	limitStr := r.URL.Query().Get("limit")
+	searchQuery := r.URL.Query().Get("search_query")
 
 	// Check if category parameter exists (even if empty string)
 	// We need to distinguish between "no category parameter" and "category='' for uncategorized"
@@ -62,7 +63,7 @@ func HandleArticles(h *core.Handler, w http.ResponseWriter, r *http.Request) {
 	showHiddenStr, _ := h.DB.GetSetting("show_hidden_articles")
 	showHidden := showHiddenStr == "true"
 
-	articles, err := h.DB.GetArticles(filter, feedID, category, showHidden, limit, offset)
+	articles, err := h.DB.GetArticlesWithSearch(filter, feedID, category, showHidden, searchQuery, limit, offset)
 	if err != nil {
 		response.Error(w, err, http.StatusInternalServerError)
 		return

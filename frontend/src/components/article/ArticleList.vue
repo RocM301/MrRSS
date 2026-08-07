@@ -15,6 +15,8 @@ import {
   PhClock,
   PhLightning,
   PhArrowUp,
+  PhMagnifyingGlass,
+  PhX,
 } from '@phosphor-icons/vue';
 import ArticleFilterModal from '../modals/filter/ArticleFilterModal.vue';
 import ArticleItem from './ArticleItem.vue';
@@ -90,6 +92,13 @@ const isAISearchActive = ref(false);
 // AI Search enabled from settings
 const isAISearchEnabled = computed(() => settings.value.ai_search_enabled);
 
+// Article keyword search state
+const showArticleSearch = ref(false);
+const articleSearchDraft = ref(store.searchQuery);
+const articleSearchInputRef = ref<HTMLInputElement | null>(null);
+const isArticleSearchActive = computed(() => store.searchQuery.trim().length > 0);
+let articleSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 // Use store's filtered articles and loading state directly
 const filteredArticlesFromServer = computed(() => store.filteredArticlesFromServer);
 const isFilterLoading = computed(() => store.isFilterLoading);
@@ -126,6 +135,66 @@ function handleAISearchResults(articles: Article[]) {
 function handleAISearchClear() {
   aiSearchResults.value = [];
   isAISearchActive.value = false;
+}
+
+function onArticleSearchInput() {
+  if (articleSearchDebounceTimer) {
+    clearTimeout(articleSearchDebounceTimer);
+  }
+
+  articleSearchDebounceTimer = setTimeout(() => {
+    articleSearchDebounceTimer = null;
+    applyArticleSearch();
+  }, 300);
+}
+
+function handleArticleSearchKeydown(event: KeyboardEvent) {
+  if (event.key === 'Enter') {
+    if (articleSearchDebounceTimer) {
+      clearTimeout(articleSearchDebounceTimer);
+      articleSearchDebounceTimer = null;
+    }
+    applyArticleSearch();
+  } else if (event.key === 'Escape') {
+    clearArticleSearch();
+  }
+}
+
+async function toggleArticleSearch() {
+  showArticleSearch.value = !showArticleSearch.value;
+  if (!showArticleSearch.value) return;
+
+  articleSearchDraft.value = store.searchQuery;
+  await nextTick();
+  articleSearchInputRef.value?.focus();
+}
+
+async function applyArticleSearch(force = false): Promise<void> {
+  const query = articleSearchDraft.value.trim();
+  if (!force && store.searchQuery === query) return;
+
+  store.searchQuery = query;
+  store.page = 1;
+  store.hasMore = true;
+  shouldRestoreScroll.value = false;
+
+  if (activeFilters.value.length > 0) {
+    await fetchFilteredArticles(activeFilters.value, false);
+  } else {
+    await store.fetchArticles(false);
+  }
+
+  await nextTick();
+  if (listRef.value) {
+    listRef.value.scrollTop = 0;
+  }
+}
+
+async function clearArticleSearch(): Promise<void> {
+  articleSearchDraft.value = '';
+  await applyArticleSearch(true);
+  await nextTick();
+  articleSearchInputRef.value?.focus();
 }
 
 const { showArticleContextMenu } = useArticleActions(t, defaultViewMode, async () => {
@@ -302,6 +371,10 @@ onBeforeUnmount(() => {
   if (scrollThrottleTimer) {
     clearTimeout(scrollThrottleTimer);
     scrollThrottleTimer = null;
+  }
+  if (articleSearchDebounceTimer) {
+    clearTimeout(articleSearchDebounceTimer);
+    articleSearchDebounceTimer = null;
   }
   if (scrollbarVisibilityTimer) {
     clearTimeout(scrollbarVisibilityTimer);
@@ -831,6 +904,16 @@ async function markAllVisibleAsRead(): Promise<void> {
               class="sm:w-5 sm:h-5"
             />
           </button>
+          <button
+            class="text-text-secondary hover:text-text-primary hover:bg-bg-tertiary p-1 sm:p-1.5 rounded transition-colors"
+            :class="showArticleSearch || isArticleSearchActive ? 'text-accent bg-bg-tertiary' : ''"
+            :aria-pressed="showArticleSearch || isArticleSearchActive"
+            :title="t('article.search.buttonTitle')"
+            :aria-label="t('article.search.button')"
+            @click="toggleArticleSearch"
+          >
+            <PhMagnifyingGlass :size="18" class="sm:w-5 sm:h-5" />
+          </button>
           <div class="relative">
             <button
               class="text-text-secondary hover:text-text-primary hover:bg-bg-tertiary p-1 sm:p-1.5 rounded transition-colors"
@@ -983,6 +1066,31 @@ async function markAllVisibleAsRead(): Promise<void> {
           </button>
         </div>
       </div>
+      <div v-if="showArticleSearch" class="mt-3 flex items-center gap-2">
+        <div class="relative flex-1">
+          <input
+            ref="articleSearchInputRef"
+            v-model="articleSearchDraft"
+            type="text"
+            class="w-full rounded border border-border bg-bg-secondary px-3 py-2 pl-8 pr-8 text-sm text-text-primary placeholder:text-text-secondary focus:border-accent focus:outline-none"
+            :placeholder="t('article.search.placeholder')"
+            @input="onArticleSearchInput"
+            @keydown="handleArticleSearchKeydown"
+          />
+          <PhMagnifyingGlass
+            :size="14"
+            class="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary"
+          />
+          <button
+            v-if="articleSearchDraft || isArticleSearchActive"
+            class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-text-primary"
+            :title="t('common.clear')"
+            @click="clearArticleSearch"
+          >
+            <PhX :size="13" />
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- AI Search Bar -->
@@ -1012,11 +1120,28 @@ async function markAllVisibleAsRead(): Promise<void> {
 
       <div
         v-if="
-          filteredArticles.length === 0 && !store.isLoading && !isFilterLoading && !isAISearchActive
+          filteredArticles.length === 0 &&
+          !store.isLoading &&
+          !isFilterLoading &&
+          !isAISearchActive &&
+          !isArticleSearchActive
         "
         class="p-4 sm:p-5 text-center text-text-secondary text-sm sm:text-base"
       >
         {{ t('article.content.noArticles') }}
+      </div>
+
+      <div
+        v-if="
+          isArticleSearchActive &&
+          !isAISearchActive &&
+          filteredArticles.length === 0 &&
+          !store.isLoading &&
+          !isFilterLoading
+        "
+        class="p-4 sm:p-5 text-center text-text-secondary text-sm sm:text-base"
+      >
+        {{ t('article.search.noResults') }}
       </div>
 
       <!-- AI Search no results message -->

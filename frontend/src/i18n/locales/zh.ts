@@ -89,6 +89,12 @@ const zh: TranslationMessages = {
       markAllVisibleAsRead: '全部标记为已读',
       allArticlesLoaded: '已加载全部文章',
     },
+    search: {
+      button: '搜索文章',
+      buttonTitle: '搜索文章',
+      noResults: '没有找到匹配的文章',
+      placeholder: '搜索文章...',
+    },
     navigation: {
       goToAllArticles: '转到所有文章',
       goToFavorites: '转到收藏',

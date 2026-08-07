@@ -206,6 +206,9 @@ export const useAppStore = defineStore('app', () => {
     if (currentFeedId.value) url += `&feed_id=${currentFeedId.value}`;
     if (currentCategory.value !== null)
       url += `&category=${encodeURIComponent(currentCategory.value)}`;
+    if (searchQuery.value.trim()) {
+      url += `&search_query=${encodeURIComponent(searchQuery.value.trim())}`;
+    }
 
     try {
       const res = await fetch(url);
@@ -250,6 +253,9 @@ export const useAppStore = defineStore('app', () => {
       if (currentFeedId.value) url += `&feed_id=${currentFeedId.value}`;
       if (currentCategory.value !== null)
         url += `&category=${encodeURIComponent(currentCategory.value)}`;
+      if (searchQuery.value.trim()) {
+        url += `&search_query=${encodeURIComponent(searchQuery.value.trim())}`;
+      }
 
       const res = await fetch(url);
       const latest: Article[] = (await res.json()) || [];

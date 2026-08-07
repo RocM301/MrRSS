@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"time"
+	"unicode"
 
 	"MrRSS/internal/models"
 	"MrRSS/internal/utils/urlutil"
@@ -111,9 +112,43 @@ func (db *DB) SaveArticles(ctx context.Context, articles []*models.Article) erro
 	return tx.Commit()
 }
 
-// GetArticles retrieves articles with filtering, pagination, and sorting.
-// Optimized to filter feeds first for category queries, reducing JOIN overhead.
 func (db *DB) GetArticles(filter string, feedID int64, category string, showHidden bool, limit, offset int) ([]models.Article, error) {
+	return db.GetArticlesWithSearch(filter, feedID, category, showHidden, "", limit, offset)
+}
+
+func splitArticleSearchTerms(query string) []string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return nil
+	}
+
+	rawTerms := strings.FieldsFunc(query, func(r rune) bool {
+		return unicode.IsSpace(r) || strings.ContainsRune(",，;；|", r)
+	})
+
+	terms := make([]string, 0, len(rawTerms))
+	seen := make(map[string]struct{}, len(rawTerms))
+	for _, term := range rawTerms {
+		term = strings.TrimSpace(term)
+		if term == "" {
+			continue
+		}
+		if _, exists := seen[term]; exists {
+			continue
+		}
+		seen[term] = struct{}{}
+		terms = append(terms, term)
+		if len(terms) >= 8 {
+			break
+		}
+	}
+
+	return terms
+}
+
+// GetArticlesWithSearch retrieves articles with filtering, keyword search, pagination, and sorting.
+// Optimized to filter feeds first for category queries, reducing JOIN overhead.
+func (db *DB) GetArticlesWithSearch(filter string, feedID int64, category string, showHidden bool, searchQuery string, limit, offset int) ([]models.Article, error) {
 	db.WaitForReady()
 
 	// Optimization: For category queries, first get the feed IDs, then query articles
@@ -157,12 +192,17 @@ func (db *DB) GetArticles(filter string, feedID int64, category string, showHidd
 		useFeedIDFilter = true
 	}
 
+	searchTerms := splitArticleSearchTerms(searchQuery)
+
 	// Build the main query
 	baseQuery := `
 		SELECT a.id, a.feed_id, a.title, a.url, a.image_url, a.audio_url, a.video_url, a.published_at, a.is_read, a.is_favorite, a.is_hidden, a.is_read_later, a.translated_title, a.summary, a.freshrss_item_id, f.title, a.author
 		FROM articles a
 		JOIN feeds f ON a.feed_id = f.id
 	`
+	if len(searchTerms) > 0 {
+		baseQuery += " LEFT JOIN article_contents c ON a.id = c.article_id\n"
+	}
 	var args []interface{}
 	whereClauses := []string{}
 
@@ -201,6 +241,20 @@ func (db *DB) GetArticles(filter string, feedID int64, category string, showHidd
 	} else if feedID > 0 {
 		whereClauses = append(whereClauses, "a.feed_id = ?")
 		args = append(args, feedID)
+	}
+
+	for _, term := range searchTerms {
+		likeTerm := "%" + term + "%"
+		whereClauses = append(whereClauses, `(
+			LOWER(COALESCE(a.title, '')) LIKE ? OR
+			LOWER(COALESCE(a.translated_title, '')) LIKE ? OR
+			LOWER(COALESCE(a.summary, '')) LIKE ? OR
+			LOWER(COALESCE(a.author, '')) LIKE ? OR
+			LOWER(COALESCE(a.url, '')) LIKE ? OR
+			LOWER(COALESCE(f.title, '')) LIKE ? OR
+			LOWER(COALESCE(c.content, '')) LIKE ?
+		)`)
+		args = append(args, likeTerm, likeTerm, likeTerm, likeTerm, likeTerm, likeTerm, likeTerm)
 	}
 
 	query := baseQuery
