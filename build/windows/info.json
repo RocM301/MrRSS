@@ -1,10 +1,10 @@
 {
 	"fixed": {
-		"file_version": "1.3.23"
+		"file_version": "1.3.23.5"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "1.3.23",
+			"ProductVersion": "1.3.23-mod.5",
 			"CompanyName": "Ch3nyang",
 			"FileDescription": "MrRSS",
 			"LegalCopyright": "Copyright © 2026",
