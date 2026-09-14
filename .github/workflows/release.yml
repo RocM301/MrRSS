@@ -301,7 +301,9 @@ jobs:
       - name: Install Wails CLI
         if: steps.check_artifacts.outputs.skip_build == 'false'
         shell: bash
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+        run: |
+          WAILS_VERSION=$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)
+          go install "github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION}"
 
       - name: Install frontend dependencies
         if: steps.check_artifacts.outputs.skip_build == 'false'
