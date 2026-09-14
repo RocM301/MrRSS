@@ -116,6 +116,8 @@ jobs:
 
   build-release:
     name: Build ${{ matrix.platform }}-${{ matrix.arch }}
+    env:
+      CYPRESS_INSTALL_BINARY: '0'
     needs: create-release
     runs-on: ${{ matrix.os }}
     permissions:
