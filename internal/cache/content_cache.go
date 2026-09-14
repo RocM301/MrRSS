@@ -121,6 +121,12 @@ func (cc *ContentCache) Set(articleID int64, content string) {
 	}
 }
 
+func (cc *ContentCache) Delete(articleID int64) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	delete(cc.content, articleID)
+}
+
 // SetFeed stores feed in cache
 func (cc *ContentCache) SetFeed(feedID int64, feed *gofeed.Feed) {
 	cc.mu.Lock()

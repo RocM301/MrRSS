@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useAppStore } from '@/stores/app';
 import { useI18n } from 'vue-i18n';
 import { openInBrowser } from '@/utils/browser';
@@ -280,13 +280,14 @@ export function useArticleDetail() {
     }
   }
 
-  async function fetchArticleContent() {
+  async function fetchArticleContent(retry = false) {
     if (!article.value) return;
 
     currentArticleId.value = article.value.id; // Track which article we're loading
 
     try {
-      const res = await fetch(`/api/articles/content?id=${article.value.id}`);
+      isLoadingContent.value = true;
+      const res = await fetch(`/api/articles/content?id=${article.value.id}${retry ? '&retry=true' : ''}`);
       if (res.ok) {
         const data = await res.json();
         let content = data.content || '';
@@ -301,14 +302,8 @@ export function useArticleDetail() {
 
         articleContent.value = content;
 
-        // Only show loading animation for non-cached content
-        if (!data.cached) {
-          // Content was fetched from feed, show loading and trigger watch
-          isLoadingContent.value = true;
-          await nextTick(); // Ensure content is rendered first
-          isLoadingContent.value = false;
-        }
-        // If cached, we don't touch isLoadingContent at all - no animation!
+        currentArticleId.value = article.value.id;
+        isLoadingContent.value = false;
       } else {
         console.error('Failed to fetch article content');
         articleContent.value = '';
@@ -322,9 +317,10 @@ export function useArticleDetail() {
   }
 
   // Handle retry loading content
-  function handleRetryLoadContent() {
-    if (article.value && showContent.value) {
-      fetchArticleContent();
+  async function handleRetryLoadContent() {
+    if (article.value) {
+      articleContent.value = '';
+      await fetchArticleContent(true);
     }
   }
 

@@ -57,8 +57,12 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 // Handle retry load content
-function handleRetryLoad() {
-  emit('retryLoadContent');
+async function handleRetryLoad() {
+  // RSS feeds may omit the body even when the original page is available.
+  await fetchFullArticle(false);
+  if (!fullArticleContent.value) {
+    emit('retryLoadContent');
+  }
 }
 
 // Chat state
@@ -71,6 +75,12 @@ const articleScrollContainer = ref<HTMLElement | null>(null);
 const isFetchingFullArticle = ref(false);
 const fullArticleContent = ref('');
 const autoShowAllContent = ref(false);
+const fullArticleContentCache = new Map<number, string>();
+let autoFetchRequestToken = 0;
+
+function waitBeforeAutoRetry(delayMs: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, delayMs));
+}
 
 // Computed property to determine if auto-expand should be enabled for this feed
 const shouldAutoExpandContent = computed(() => {
@@ -251,9 +261,11 @@ async function forceTranslateContent() {
 async function fetchFullArticle(showErrors: boolean = true) {
   if (!props.article?.id) return;
 
+  const articleId = props.article.id;
+  const articleUrl = props.article.url;
   isFetchingFullArticle.value = true;
   try {
-    const res = await fetch(`/api/articles/fetch-full?id=${props.article.id}`, {
+    const res = await fetch(`/api/articles/fetch-full?id=${articleId}`, {
       method: 'POST',
     });
 
@@ -265,11 +277,17 @@ async function fetchFullArticle(showErrors: boolean = true) {
       const cacheEnabled = await isMediaCacheEnabled();
       if (cacheEnabled && content) {
         // Use feed URL as referer for anti-hotlinking (more reliable than article URL)
-        const feedUrl = data.feed_url || props.article.url;
+        const feedUrl = data.feed_url || articleUrl;
         content = proxyImagesInHtml(content, feedUrl);
       }
 
+      // Ignore a late response from an article that was already switched away.
+      if (props.article?.id !== articleId) return;
+
       fullArticleContent.value = content;
+      if (content) {
+        fullArticleContentCache.set(articleId, content);
+      }
       if (showErrors) {
         window.showToast(t('article.action.fullArticleFetched'), 'success');
       }
@@ -305,6 +323,23 @@ async function fetchFullArticle(showErrors: boolean = true) {
     }
   } finally {
     isFetchingFullArticle.value = false;
+  }
+}
+
+async function autoFetchFullArticle() {
+  const articleId = props.article?.id;
+  if (!articleId || props.isLoadingContent || fullArticleContent.value) return;
+
+  const requestToken = ++autoFetchRequestToken;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (requestToken !== autoFetchRequestToken || props.article?.id !== articleId) return;
+
+    await fetchFullArticle(false);
+    if (fullArticleContent.value) return;
+
+    if (attempt < 2) {
+      await waitBeforeAutoRetry(500 * (attempt + 1));
+    }
   }
 }
 
@@ -688,7 +723,8 @@ watch(
       summaryResult.value = null;
       translatedTitle.value = '';
       lastTranslatedArticleId.value = null; // Reset translation tracking
-      fullArticleContent.value = ''; // Reset full article content when switching articles
+      autoFetchRequestToken += 1;
+      fullArticleContent.value = fullArticleContentCache.get(newId) || '';
 
       if (props.article) {
         // Check if article has a cached summary first
@@ -718,6 +754,17 @@ watch(
       }
     }
   }
+);
+
+// Automatically recover articles whose RSS entry has no usable body.
+watch(
+  () => [props.article?.id, props.articleContent, props.isLoadingContent] as const,
+  ([articleId, content, isLoading]) => {
+    if (articleId && !content && !isLoading && !fullArticleContent.value) {
+      void autoFetchFullArticle();
+    }
+  },
+  { immediate: true }
 );
 
 // Watch for article content changes to trigger translation

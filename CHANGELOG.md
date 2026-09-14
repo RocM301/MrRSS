@@ -5,6 +5,19 @@ All notable changes to MrRSS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.23-mod.6] - 2026-09-14
+
+### Fixed
+
+- 文章正文为空时自动从原文提取，最多尝试 3 次，失败后仍可手动重试。
+- 成功获取的正文在当前阅读组件内缓存，切换文章再返回时恢复显示。
+- 手动重试优先提取原文；必要时清除旧正文缓存后重新加载。
+- 防止其他文章的延迟全文响应覆盖当前文章。
+
+- Automatically retries loading article content when the RSS entry has no usable body.
+- Keeps successfully extracted article content when switching between articles.
+- Prevents a late response from a previous article from overwriting the current article.
+
 ## [1.3.23] - 2026-03-26
 
 ### Fixed

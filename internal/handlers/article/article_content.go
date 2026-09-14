@@ -33,6 +33,10 @@ func HandleGetArticleContent(h *core.Handler, w http.ResponseWriter, r *http.Req
 		response.Error(w, nil, http.StatusBadRequest)
 		return
 	}
+	if r.URL.Query().Get("retry") == "true" {
+		h.ContentCache.Delete(articleID)
+		_ = h.DB.DeleteArticleContent(articleID)
+	}
 
 	// Get the article from database to access feed_id
 	article, err := h.DB.GetArticleByID(articleID)
