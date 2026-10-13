@@ -327,6 +327,11 @@ const zh: TranslationMessages = {
     feed: {
       adding: '添加中...',
       addNewFeed: '添加新订阅',
+      searchRSS: '搜索 RSS 地址',
+      searchRSSPlaceholder: '输入网站名称，例如：网易',
+      searchRSSError: '搜索暂时不可用，请稍后重试。',
+      searchRSSEmpty: '没有找到匹配的 RSS 地址',
+      searchRSSInactive: '（可能已停更）',
       addSubscription: '添加订阅',
       categoryPlaceholder: '例如 科技/新闻',
       deleteFeedMessage: '确定要删除这个订阅吗？',

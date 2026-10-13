@@ -8,6 +8,7 @@ import { useSettings } from '@/composables/core/useSettings';
 import BaseModal from '@/components/common/BaseModal.vue';
 import ModalFooter from '@/components/common/ModalFooter.vue';
 import UrlInput from './parts/UrlInput.vue';
+import FeedSearch from './parts/FeedSearch.vue';
 import ScriptSelector from './parts/ScriptSelector.vue';
 import XPathConfig from './parts/XPathConfig.vue';
 import EmailConfig from './parts/EmailConfig.vue';
@@ -261,6 +262,15 @@ const submitButtonText = computed(() => {
   <BaseModal :title="modalTitle" size="md" :z-index="60" @close="close">
     <!-- Form Content -->
     <div class="p-4 sm:p-6 scroll-smooth">
+      <FeedSearch
+        v-if="mode === 'add' && feedType === 'url'"
+        @select="
+          (result) => {
+            title = result.title;
+            url = result.url;
+          }
+        "
+      />
       <div class="mb-3 sm:mb-4">
         <label class="block mb-1 sm:mb-1.5 font-semibold text-xs sm:text-sm text-text-secondary">
           {{ t('common.form.title') }}

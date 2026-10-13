@@ -23,6 +23,7 @@ func registerFeedRoutes(mux *http.ServeMux, h *core.Handler) {
 	mux.HandleFunc("/api/feeds/test-imap", func(w http.ResponseWriter, r *http.Request) { feedhandlers.HandleTestIMAPConnection(h, w, r) })
 
 	// Discovery routes
+	mux.HandleFunc("/api/feeds/search", func(w http.ResponseWriter, r *http.Request) { discovery.HandleSearchFeeds(h, w, r) })
 	mux.HandleFunc("/api/feeds/discover", func(w http.ResponseWriter, r *http.Request) { discovery.HandleDiscoverBlogs(h, w, r) })
 	mux.HandleFunc("/api/feeds/discover-all", func(w http.ResponseWriter, r *http.Request) { discovery.HandleDiscoverAllFeeds(h, w, r) })
 	mux.HandleFunc("/api/feeds/discover/start", func(w http.ResponseWriter, r *http.Request) { discovery.HandleStartSingleDiscovery(h, w, r) })

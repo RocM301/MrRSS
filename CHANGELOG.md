@@ -5,6 +5,18 @@ All notable changes to MrRSS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.23-mod.7] - 2026-10-13
+
+### Added
+
+- Search for RSS feeds by website name from the Add Subscription dialog.
+- Show direct feed URLs first and mark directory entries that may be inactive.
+
+### Fixed
+
+- Exclude Feedly proxy URLs that are blocked with HTTP 403 when adding feeds.
+- Release workflow now publishes macOS universal packages only.
+
 ## [1.3.23-mod.6] - 2026-09-14
 
 ### Fixed

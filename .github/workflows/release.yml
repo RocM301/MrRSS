@@ -126,32 +126,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Desktop platforms - always build
-          # Linux AMD64 build
-          - os: ubuntu-24.04
-            platform: linux
-            arch: amd64
-            ext: ''
-            build_condition: 'true'
-          # Linux ARM64 build - using native ARM64 runner
-          - os: ubuntu-24.04-arm
-            platform: linux
-            arch: arm64
-            ext: ''
-            build_condition: 'true'
-          # Windows AMD64 build
-          - os: windows-latest
-            platform: windows
-            arch: amd64
-            ext: '.exe'
-            build_condition: 'true'
-          # Windows ARM64 build - using native ARM64 runner
-          - os: windows-11-arm
-            platform: windows
-            arch: arm64
-            ext: '.exe'
-            build_condition: 'true'
-          # macOS Universal build (includes both Intel and Apple Silicon)
+          # Release macOS Universal builds only.
           - os: macos-latest
             platform: darwin
             arch: universal

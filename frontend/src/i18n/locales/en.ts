@@ -335,6 +335,11 @@ const en: TranslationMessages = {
     feed: {
       adding: 'Adding...',
       addNewFeed: 'Add New Feed',
+      searchRSS: 'Search RSS feeds',
+      searchRSSPlaceholder: 'Website name, e.g. NetEase',
+      searchRSSError: 'Search is unavailable. Please try again later.',
+      searchRSSEmpty: 'No matching RSS feeds found',
+      searchRSSInactive: '(possibly inactive)',
       addSubscription: 'Add Subscription',
       categoryPlaceholder: 'e.g. Tech/News',
       deleteFeedMessage: 'Are you sure you want to delete this feed?',
