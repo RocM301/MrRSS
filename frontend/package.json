@@ -33,7 +33,7 @@
     "katex": "^0.16.38",
     "pinia": "^3.0.4",
     "tailwindcss": "^3.4.17",
-    "vue": "^3.5.30",
+    "vue": "^3.5.40",
     "vue-i18n": "^11.3.0"
   },
   "devDependencies": {
