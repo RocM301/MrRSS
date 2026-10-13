@@ -1,4 +1,5 @@
 package version
 
-// Version is the current application version
-const Version = "1.3.41"
+// Version is the current application version.
+// This fork uses the upstream version plus a "-mod.N" suffix.
+const Version = "1.3.41-mod.9"
