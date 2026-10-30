@@ -17,18 +17,25 @@ import (
 
 // ClientConfig holds the configuration for the AI client
 type ClientConfig struct {
-	APIKey        string
-	Endpoint      string
-	Model         string
-	SystemPrompt  string
-	CustomHeaders string
-	Timeout       time.Duration
+	APIKey          string
+	Endpoint        string
+	Model           string
+	SystemPrompt    string
+	CustomHeaders   string
+	Timeout         time.Duration
+	FallbackConfigs []ClientConfig
 }
+
+const RequestTimeout = 15 * time.Second
 
 // Client represents a universal AI client that supports multiple API formats
 type Client struct {
 	config ClientConfig
 	client *http.Client
+}
+
+func (c *Client) SetFallbackConfigs(configs []ClientConfig) {
+	c.config.FallbackConfigs = configs
 }
 
 // NewClient creates a new universal AI client
@@ -102,6 +109,49 @@ func (c *Client) RequestWithConfig(config RequestConfig) (ResponseResult, error)
 
 // RequestWithConfigContext makes a cancellable request with full configuration.
 func (c *Client) RequestWithConfigContext(ctx context.Context, config RequestConfig) (ResponseResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	profiles := append([]ClientConfig{c.config}, c.config.FallbackConfigs...)
+	var lastErr error
+	for profileIndex, profile := range profiles {
+		profile.FallbackConfigs = nil
+		candidate := *c
+		candidate.config = profile
+		if candidate.client == nil {
+			candidate.client = &http.Client{}
+		}
+		clientCopy := *candidate.client
+		if clientCopy.Timeout == 0 || clientCopy.Timeout > RequestTimeout {
+			clientCopy.Timeout = RequestTimeout
+		}
+		candidate.client = &clientCopy
+		request := config
+		request.Model = profile.Model
+		attempts := 1
+		if len(c.config.FallbackConfigs) > 0 && profileIndex == 0 {
+			attempts = 2
+		}
+		for attempt := 0; attempt < attempts; attempt++ {
+			attemptCtx, cancel := context.WithTimeout(ctx, RequestTimeout)
+			result, err := candidate.requestWithConfigContext(attemptCtx, request)
+			cancel()
+			if err == nil && strings.TrimSpace(result.Content) != "" {
+				return result, nil
+			}
+			if err == nil {
+				err = fmt.Errorf("AI returned empty content")
+			}
+			lastErr = err
+			if ctx.Err() != nil {
+				return ResponseResult{}, ctx.Err()
+			}
+		}
+	}
+	return ResponseResult{}, lastErr
+}
+
+func (c *Client) requestWithConfigContext(ctx context.Context, config RequestConfig) (ResponseResult, error) {
 	provider := DetectAPIProvider(c.config.Endpoint)
 
 	// An explicit protocol must preserve its own errors; retrying unrelated
@@ -295,7 +345,19 @@ func parseCustomHeaders(headersJSON string) (map[string]string, error) {
 
 	var headers map[string]string
 	if err := json.Unmarshal([]byte(headersJSON), &headers); err != nil {
-		return nil, fmt.Errorf("failed to parse custom headers JSON: %w", err)
+		var pairs []struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		}
+		if pairErr := json.Unmarshal([]byte(headersJSON), &pairs); pairErr != nil {
+			return nil, fmt.Errorf("failed to parse custom headers JSON: %w", err)
+		}
+		headers = make(map[string]string, len(pairs))
+		for _, pair := range pairs {
+			if key := strings.TrimSpace(pair.Key); key != "" {
+				headers[key] = pair.Value
+			}
+		}
 	}
 	return headers, nil
 }

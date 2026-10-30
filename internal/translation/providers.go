@@ -197,6 +197,42 @@ func (p *customProvider) SupportedLanguages() []string {
 	return []string{}
 }
 
+// mtranProvider 实现 Provider 接口的 MTranServer 翻译适配器
+type mtranProvider struct {
+	translator *MTranTranslator
+}
+
+// Name 返回提供商名称
+func (p *mtranProvider) Name() string {
+	return "mtran"
+}
+
+// Translate 执行翻译
+func (p *mtranProvider) Translate(ctx context.Context, text, targetLang string) (*TranslationResult, error) {
+	translated, err := p.translator.TranslateContext(ctx, text, targetLang)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TranslationResult{
+		Original:   text,
+		Translated: translated,
+		FromLang:   "auto", // 源语言由内置检测器自动判断
+		ToLang:     targetLang,
+		Provider:   "mtran",
+	}, nil
+}
+
+// IsAvailable 检查提供商是否可用
+func (p *mtranProvider) IsAvailable() bool {
+	return p.translator.Endpoint != ""
+}
+
+// SupportedLanguages 返回支持的语言列表
+func (p *mtranProvider) SupportedLanguages() []string {
+	return []string{}
+}
+
 // microsoftProvider 实现 Provider 接口的 Microsoft 翻译适配器
 type microsoftProvider struct {
 	translator *MicrosoftTranslator

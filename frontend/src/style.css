@@ -121,6 +121,13 @@ textarea,
 .prose-content img {
   pointer-events: auto !important;
   cursor: pointer !important;
+  /* Re-enable native image dragging so images can be dragged out of the app
+     and saved to Finder / File Explorer (the global `img` rule disables it) */
+  -webkit-user-drag: auto !important;
+  -khtml-user-drag: auto !important;
+  -moz-user-drag: auto !important;
+  -o-user-drag: auto !important;
+  user-drag: auto !important;
 }
 
 /* Ensure parent elements of images don't block pointer events */

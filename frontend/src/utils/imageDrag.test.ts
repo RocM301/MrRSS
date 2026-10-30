@@ -1,7 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setImageDragData } from './imageDrag';
 
 describe('article image file dragging', () => {
+  beforeEach(() => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Chrome/130.0.0.0');
+  });
+  afterEach(() => vi.restoreAllMocks());
+  it('preserves native image file dragging in macOS WKWebView', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('AppleWebKit/605.1.15');
+    const image = document.createElement('img');
+    image.src = 'https://example.org/photo.jpg';
+    const dataTransfer = { effectAllowed: '', setData: vi.fn() };
+    setImageDragData({ dataTransfer } as unknown as DragEvent, image);
+    expect(dataTransfer.setData).not.toHaveBeenCalled();
+    expect(dataTransfer.effectAllowed).toBe('');
+  });
   it('offers a proxy download with a safe original filename instead of a link shortcut', () => {
     const image = document.createElement('img');
     image.src = 'https://example.org/pictures/photo.jpg?token=secret';

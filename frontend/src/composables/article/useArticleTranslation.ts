@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Article } from '@/types/models';
+import { isInvalidArticleTranslation } from '@/utils/articleTranslation';
 import {
   requestTranslation,
   notifyTranslationError,
@@ -45,7 +46,12 @@ export function useArticleTranslation() {
       return;
     for (const id of visible) {
       const article = currentArticles.get(id);
-      if (article && (!article.translated_title || article.translated_title === article.title))
+      if (
+        article &&
+        (!article.translated_title ||
+          article.translated_title === article.title ||
+          isInvalidArticleTranslation(article.translated_title))
+      )
         void translateArticle(article, true);
     }
   }
@@ -124,7 +130,9 @@ export function useArticleTranslation() {
               // - Translation equals original title (indicates failed/skipped translation)
               const needsTranslation =
                 article &&
-                (!article.translated_title || article.translated_title === article.title);
+                (!article.translated_title ||
+                  article.translated_title === article.title ||
+                  isInvalidArticleTranslation(article.translated_title));
 
               // Only translate if article exists, needs translation, and is not already being translated
               if (needsTranslation && !translatingArticles.value.has(articleId)) {

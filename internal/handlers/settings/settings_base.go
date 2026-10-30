@@ -98,6 +98,8 @@ var AllSettings = []SettingDef{
 	{Key: "miniflux_server_url", Encrypted: false},
 	{Key: "miniflux_sync_on_startup", Encrypted: false},
 	{Key: "miniflux_username", Encrypted: false},
+	{Key: "mtran_endpoint", Encrypted: false},
+	{Key: "mtran_token", Encrypted: true},
 	{Key: "network_bandwidth_mbps", Encrypted: false},
 	{Key: "network_latency_ms", Encrypted: false},
 	{Key: "network_speed", Encrypted: false},

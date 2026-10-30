@@ -114,7 +114,7 @@ func HandleCheckUpdates(h *core.Handler, w http.ResponseWriter, r *http.Request)
 
 	currentVersion := version.Version
 	// Use /releases endpoint to get all releases, then filter for stable versions
-	const githubAPI = "https://api.github.com/repos/DevXDojo/MrRSS/releases"
+	const githubAPI = "https://api.github.com/repos/RocM301/MrRSS/releases"
 
 	// Use the same proxy-aware client as the update downloader.
 	client, err := createUpdateHTTPClient(h, 30*time.Second)

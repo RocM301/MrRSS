@@ -151,8 +151,12 @@ onUnmounted(() => {
 
 /* Mobile devices */
 @media (max-width: 767px) {
-  .feed-drawer-wrapper:not(.pinned) {
+  .feed-drawer-wrapper {
+    position: absolute;
     left: 44px;
+    top: 0;
+    bottom: 0;
+    z-index: 20;
   }
 }
 

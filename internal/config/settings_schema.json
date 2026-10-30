@@ -172,6 +172,20 @@
       "encrypted": true,
       "frontend_key": "deeplAPIKey"
     },
+    "mtran_endpoint": {
+      "type": "string",
+      "default": "",
+      "category": "translation",
+      "encrypted": false,
+      "frontend_key": "mtranEndpoint"
+    },
+    "mtran_token": {
+      "type": "string",
+      "default": "",
+      "category": "translation",
+      "encrypted": true,
+      "frontend_key": "mtranToken"
+    },
     "deepl_endpoint": {
       "type": "string",
       "default": "",

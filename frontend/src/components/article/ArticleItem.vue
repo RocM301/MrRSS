@@ -11,6 +11,7 @@ import { useShowPreviewImages } from '@/composables/ui/useShowPreviewImages';
 import { useAppStore } from '@/stores/app';
 import { useSettings } from '@/composables/core/useSettings';
 import { imageCache } from '@/utils/imageCache';
+import { isInvalidArticleTranslation } from '@/utils/articleTranslation';
 
 interface Props {
   article: Article;
@@ -33,6 +34,12 @@ const { t } = useI18n();
 const { showPreviewImages } = useShowPreviewImages();
 const { settings } = useSettings();
 const store = useAppStore();
+const hasValidTranslatedTitle = computed(
+  () =>
+    !!props.article.translated_title &&
+    props.article.translated_title !== props.article.title &&
+    !isInvalidArticleTranslation(props.article.translated_title)
+);
 
 // Compact mode setting (layout_mode === 'compact')
 const compactMode = computed(() => {
@@ -225,9 +232,7 @@ function handleImageError(event: Event) {
       <div class="flex items-start gap-1.5 sm:gap-2">
         <!-- Normal mode or no translation: single line title -->
         <h4
-          v-if="
-            !article.translated_title || article.translated_title === article.title || compactMode
-          "
+          v-if="!hasValidTranslatedTitle || compactMode"
           class="flex-1 m-0 text-base sm:text-base font-semibold leading-snug text-text-primary article-title"
           :class="{
             'mb-0.5 sm:mb-1': !compactMode,
@@ -237,18 +242,13 @@ function handleImageError(event: Event) {
           }"
         >
           <span
-            v-if="article.translated_title && article.translated_title !== article.title"
+            v-if="hasValidTranslatedTitle"
             :class="{ 'read-translated-title': article.is_read && compactMode }"
           >
             {{ article.translated_title }}
           </span>
           <span v-else>{{ article.title }}</span>
-          <span
-            v-if="
-              compactMode && article.translated_title && article.translated_title !== article.title
-            "
-            class="original-title-inline"
-          >
+          <span v-if="compactMode && hasValidTranslatedTitle" class="original-title-inline">
             {{ article.title }}
           </span>
         </h4>
@@ -257,7 +257,7 @@ function handleImageError(event: Event) {
           <h4
             class="m-0 mb-0 sm:mb-0.5 text-base sm:text-base font-semibold leading-snug text-text-primary article-title"
           >
-            {{ article.translated_title }}
+            {{ hasValidTranslatedTitle ? article.translated_title : article.title }}
           </h4>
           <div
             class="article-original-title sm:text-xs text-text-secondary italic mb-0.5 sm:mb-1 article-title"

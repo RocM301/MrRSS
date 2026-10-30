@@ -19,6 +19,10 @@ type ProfileDB interface {
 	GetSetting(key string) (string, error)
 }
 
+type allAIProfilesDB interface {
+	GetAllAIProfiles() ([]models.AIProfile, error)
+}
+
 // NewProfileProvider creates a new ProfileProvider
 func NewProfileProvider(db ProfileDB) *ProfileProvider {
 	return &ProfileProvider{db: db}
@@ -91,6 +95,41 @@ func (p *ProfileProvider) GetConfigForFeature(feature FeatureType) (*ClientConfi
 	}
 
 	return configFromProfile(profile), nil
+}
+
+func (p *ProfileProvider) GetConfigsForFeature(feature FeatureType) ([]ClientConfig, error) {
+	primary, err := p.GetProfileForFeature(feature)
+	if err != nil {
+		return nil, err
+	}
+	configs := make([]ClientConfig, 0)
+	appendProfile := func(profile *models.AIProfile) {
+		if profile != nil && profile.Endpoint != "" {
+			configs = append(configs, *configFromProfile(profile))
+		}
+	}
+	appendProfile(primary)
+	if db, ok := p.db.(allAIProfilesDB); ok {
+		profiles, err := db.GetAllAIProfiles()
+		if err != nil {
+			return nil, err
+		}
+		for i := range profiles {
+			if primary == nil || profiles[i].ID != primary.ID {
+				appendProfile(&profiles[i])
+			}
+		}
+	}
+	if len(configs) == 0 {
+		cfg, err := p.GetConfigForFeature(feature)
+		if err != nil {
+			return nil, err
+		}
+		if cfg != nil {
+			configs = append(configs, *cfg)
+		}
+	}
+	return configs, nil
 }
 
 // GetConfigForProfile returns the AI client config for an explicitly selected profile.

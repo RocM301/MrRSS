@@ -28,11 +28,28 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await Clipboard.SetText(text);
     return true;
-  } catch (error) {
-    console.error('Failed to copy to clipboard:', error);
+  } catch {
+    // HTTP browser sessions may expose neither the secure nor native clipboard.
+  }
+
+  const previousFocus = document.activeElement as HTMLElement | null;
+  const input = document.createElement('textarea');
+  input.value = text;
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.appendChild(input);
+  try {
+    input.select();
+    return document.execCommand('copy');
+  } catch {
     return false;
+  } finally {
+    input.remove();
+    previousFocus?.focus();
   }
 }
+
+export const copyText = copyToClipboard;
 
 /**
  * Copy article URL to clipboard

@@ -132,6 +132,7 @@ func HandleAIChat(h *core.Handler, w http.ResponseWriter, r *http.Request) {
 
 	// Get AI settings - try ProfileProvider first
 	var apiKey, endpoint, model, customHeaders string
+	var fallbackConfigs []ai.ClientConfig
 	if h.AIProfileProvider != nil {
 		var cfg *ai.ClientConfig
 		var err error
@@ -155,6 +156,11 @@ func HandleAIChat(h *core.Handler, w http.ResponseWriter, r *http.Request) {
 			endpoint = cfg.Endpoint
 			model = cfg.Model
 			customHeaders = cfg.CustomHeaders
+			if req.ProfileID == 0 {
+				if configs, configErr := h.AIProfileProvider.GetConfigsForFeature(ai.FeatureChat); configErr == nil && len(configs) > 1 {
+					fallbackConfigs = configs[1:]
+				}
+			}
 			log.Printf("Using AI profile for chat (model: %s)", model)
 		}
 	}
@@ -208,11 +214,12 @@ func HandleAIChat(h *core.Handler, w http.ResponseWriter, r *http.Request) {
 
 	// Create AI client
 	clientConfig := ai.ClientConfig{
-		APIKey:        apiKey,
-		Endpoint:      endpoint,
-		Model:         model,
-		CustomHeaders: customHeaders,
-		Timeout:       60 * time.Second,
+		APIKey:          apiKey,
+		Endpoint:        endpoint,
+		Model:           model,
+		CustomHeaders:   customHeaders,
+		Timeout:         60 * time.Second,
+		FallbackConfigs: fallbackConfigs,
 	}
 	client := ai.NewClientWithHTTPClient(clientConfig, httpClient)
 

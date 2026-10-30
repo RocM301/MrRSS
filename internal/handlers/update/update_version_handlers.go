@@ -29,7 +29,26 @@ func HandleVersion(h *core.Handler, w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// compareVersions compares two semantic versions (e.g., "1.1.0" vs "1.0.0")
+// leadingInt extracts the leading integer from a version component.
+// This makes the comparison tolerant of suffixes glued onto a number, such as
+// the fork's "-mod.N" scheme: "1.3.23-mod.2" splits on "." into
+// ["1", "3", "23-mod", "2"], and leadingInt("23-mod") == 23. The trailing
+// ".2" is then compared as its own numeric component, so mod.2 < mod.3, while
+// a genuine upstream bump (1.3.24-...) still compares greater.
+func leadingInt(s string) int {
+	end := 0
+	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return 0
+	}
+	n, _ := strconv.Atoi(s[:end])
+	return n
+}
+
+// compareVersions compares two dotted versions (e.g., "1.1.0" vs "1.0.0", or
+// "1.3.23-mod.2" vs "1.3.23-mod.3").
 // Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
 func compareVersions(v1, v2 string) int {
 	parts1 := strings.Split(v1, ".")
@@ -43,10 +62,10 @@ func compareVersions(v1, v2 string) int {
 	for i := 0; i < maxLen; i++ {
 		var p1, p2 int
 		if i < len(parts1) {
-			p1, _ = strconv.Atoi(parts1[i])
+			p1 = leadingInt(parts1[i])
 		}
 		if i < len(parts2) {
-			p2, _ = strconv.Atoi(parts2[i])
+			p2 = leadingInt(parts2[i])
 		}
 
 		if p1 > p2 {

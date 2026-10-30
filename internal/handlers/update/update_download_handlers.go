@@ -42,7 +42,7 @@ func HandleDownloadUpdate(h *core.Handler, w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	const allowedURLPrefix = "https://github.com/DevXDojo/MrRSS/releases/download/"
+	const allowedURLPrefix = "https://github.com/RocM301/MrRSS/releases/download/"
 	if !strings.HasPrefix(req.DownloadURL, allowedURLPrefix) {
 		log.Printf("Invalid update download URL")
 		response.Error(w, fmt.Errorf("invalid download URL"), http.StatusBadRequest)

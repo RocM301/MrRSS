@@ -82,11 +82,11 @@ function handleDownloadInstall() {
 }
 
 function openGitHubRepo() {
-  openInBrowser('https://github.com/DevXDojo/MrRSS');
+  openInBrowser('https://github.com/RocM301/MrRSS');
 }
 
 function openGitHubRelease() {
-  openInBrowser('https://github.com/DevXDojo/MrRSS/releases/latest');
+  openInBrowser('https://github.com/RocM301/MrRSS/releases/latest');
 }
 
 function formatBytes(bytes: number): string {

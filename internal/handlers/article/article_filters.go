@@ -23,11 +23,12 @@ type FilterCondition struct {
 
 // FilterRequest represents the request body for filtered articles
 type FilterRequest struct {
-	Conditions []FilterCondition `json:"conditions"`
-	Page       int               `json:"page"`
-	Limit      int               `json:"limit"`
-	SortOrder  string            `json:"sort_order"`
-	GroupBy    string            `json:"group_by"`
+	Conditions  []FilterCondition `json:"conditions"`
+	Page        int               `json:"page"`
+	Limit       int               `json:"limit"`
+	SortOrder   string            `json:"sort_order"`
+	GroupBy     string            `json:"group_by"`
+	SearchQuery string            `json:"search_query"`
 }
 
 // FilterResponse represents the response for filtered articles with pagination info

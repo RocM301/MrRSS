@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 	"time"
+	"unicode"
 
 	"MrRSS/internal/models"
 	"MrRSS/internal/utils/urlutil"
@@ -211,8 +212,6 @@ func isRetryableSQLiteWriteError(err error) bool {
 	return primaryCode == 5 || primaryCode == 6
 }
 
-// GetArticles retrieves articles with filtering, pagination, and sorting.
-// Optimized to filter feeds first for category queries, reducing JOIN overhead.
 func (db *DB) GetArticles(filter string, feedID int64, category string, showHidden bool, limit, offset int) ([]models.Article, error) {
 	return db.GetArticlesWithUnreadFilterSorted(filter, feedID, category, showHidden, false, "newest", limit, offset)
 }
@@ -223,7 +222,51 @@ func (db *DB) GetArticlesWithUnreadFilter(filter string, feedID int64, category 
 }
 
 // GetArticlesWithUnreadFilterSorted returns articles in a validated publication-time order.
+func splitArticleSearchTerms(query string) []string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return nil
+	}
+
+	rawTerms := strings.FieldsFunc(query, func(r rune) bool {
+		return unicode.IsSpace(r) || strings.ContainsRune(",，;；|", r)
+	})
+
+	terms := make([]string, 0, len(rawTerms))
+	seen := make(map[string]struct{}, len(rawTerms))
+	for _, term := range rawTerms {
+		term = strings.TrimSpace(term)
+		if term == "" {
+			continue
+		}
+		if _, exists := seen[term]; exists {
+			continue
+		}
+		seen[term] = struct{}{}
+		terms = append(terms, term)
+		if len(terms) >= 8 {
+			break
+		}
+	}
+
+	return terms
+}
+
 func (db *DB) GetArticlesWithUnreadFilterSorted(filter string, feedID int64, category string, showHidden bool, onlyUnread bool, sortOrder string, limit, offset int, groupBy ...string) ([]models.Article, error) {
+	group := ""
+	query := ""
+	if len(groupBy) > 0 {
+		group = groupBy[0]
+	}
+	if len(groupBy) > 1 {
+		query = groupBy[1]
+	}
+	return db.getArticlesWithSearch(filter, feedID, category, showHidden, onlyUnread, sortOrder, query, limit, offset, group)
+}
+func (db *DB) GetArticlesWithSearch(filter string, feedID int64, category string, showHidden bool, searchQuery string, limit, offset int) ([]models.Article, error) {
+	return db.getArticlesWithSearch(filter, feedID, category, showHidden, false, "newest", searchQuery, limit, offset)
+}
+func (db *DB) getArticlesWithSearch(filter string, feedID int64, category string, showHidden, onlyUnread bool, sortOrder, searchQuery string, limit, offset int, groupBy ...string) ([]models.Article, error) {
 	db.WaitForReady()
 
 	// Optimization: For category queries, first get the feed IDs, then query articles
@@ -267,12 +310,17 @@ func (db *DB) GetArticlesWithUnreadFilterSorted(filter string, feedID int64, cat
 		useFeedIDFilter = true
 	}
 
+	searchTerms := splitArticleSearchTerms(searchQuery)
+
 	// Build the main query
 	baseQuery := `
 		SELECT a.id, a.feed_id, a.title, a.url, a.image_url, a.audio_url, a.video_url, a.published_at, a.is_read, a.is_favorite, a.is_hidden, a.is_read_later, a.translated_title, a.summary, a.freshrss_item_id, f.title, a.author
 		FROM articles a
 		JOIN feeds f ON a.feed_id = f.id
 	`
+	if len(searchTerms) > 0 {
+		baseQuery += " LEFT JOIN article_contents c ON a.id = c.article_id\n"
+	}
 	var args []interface{}
 	whereClauses := []string{}
 
@@ -315,6 +363,20 @@ func (db *DB) GetArticlesWithUnreadFilterSorted(filter string, feedID int64, cat
 	} else if feedID > 0 {
 		whereClauses = append(whereClauses, "a.feed_id = ?")
 		args = append(args, feedID)
+	}
+
+	for _, term := range searchTerms {
+		likeTerm := "%" + term + "%"
+		whereClauses = append(whereClauses, `(
+			LOWER(COALESCE(a.title, '')) LIKE ? OR
+			LOWER(COALESCE(a.translated_title, '')) LIKE ? OR
+			LOWER(COALESCE(a.summary, '')) LIKE ? OR
+			LOWER(COALESCE(a.author, '')) LIKE ? OR
+			LOWER(COALESCE(a.url, '')) LIKE ? OR
+			LOWER(COALESCE(f.title, '')) LIKE ? OR
+			LOWER(COALESCE(c.content, '')) LIKE ?
+		)`)
+		args = append(args, likeTerm, likeTerm, likeTerm, likeTerm, likeTerm, likeTerm, likeTerm)
 	}
 
 	query := baseQuery

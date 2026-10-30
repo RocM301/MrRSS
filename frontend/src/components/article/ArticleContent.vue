@@ -425,22 +425,24 @@ async function forceTranslateContent() {
   await translateContentParagraphs(displayContent.value, true);
 }
 
-const { fullArticleContent, isFetchingFullArticle, fetchFullArticle } = useFullArticle({
-  article: () => props.article,
-  enabled: () => appSettings.value.full_text_fetch_enabled,
-  automatic: () => shouldAutoExpandContent.value,
-  loading: () => props.isLoadingContent,
-  onSuccess: () => window.showToast(t('article.action.fullArticleFetched'), 'success'),
-  onError: () => window.showToast(t('common.errors.fetchingFullArticle'), 'error'),
-  onContent: async (content) => {
-    const article = props.article;
-    if (shouldWaitForFullContentBeforeSummary.value) void generateSummary(article);
-    await nextTick();
-    if (props.article.id !== article.id) return;
-    enhanceRendering('.prose-content');
-    if (translationEnabled.value) await translateContentParagraphs(content);
-  },
-});
+const { fullArticleContent, isFetchingFullArticle, fetchFullArticle, fullArticleFetchFinished } =
+  useFullArticle({
+    article: () => props.article,
+    enabled: () => appSettings.value.full_text_fetch_enabled,
+    automatic: () => shouldAutoExpandContent.value,
+    empty: () => !props.articleContent?.replace(/<[^>]*>/g, '').trim(),
+    loading: () => props.isLoadingContent,
+    onSuccess: () => window.showToast(t('article.action.fullArticleFetched'), 'success'),
+    onError: () => window.showToast(t('common.errors.fetchingFullArticle'), 'error'),
+    onContent: async (content) => {
+      const article = props.article;
+      if (shouldAutoGenerateSummary()) void generateSummary(article);
+      await nextTick();
+      if (props.article.id !== article.id) return;
+      enhanceRendering('.prose-content');
+      if (translationEnabled.value) await translateContentParagraphs(content);
+    },
+  });
 
 async function enterReadingMode() {
   if (!appSettings.value.full_text_fetch_enabled) {
@@ -454,7 +456,13 @@ defineExpose({ enterReadingMode, isFetchingFullArticle });
 
 // Generate summary for the current article
 async function generateSummary(article: Article, force: boolean = false) {
-  if (!summaryEnabled.value || !article) {
+  if (
+    !summaryEnabled.value ||
+    !article ||
+    article.id !== props.article?.id ||
+    isSummaryLoading(article.id) ||
+    (!displayContent.value.trim() && !article.summary)
+  ) {
     return;
   }
 
@@ -466,13 +474,15 @@ async function generateSummary(article: Article, force: boolean = false) {
   const result = await generateSummaryComposable(article, displayContent.value, force);
 
   // Update the article summary in store for caching
-  if (result?.summary && result.source !== 'rss') {
+  if (result?.summary && result.source !== 'rss' && props.article?.id === article.id) {
     store.updateArticleSummary(article.id, result.summary);
   }
 
   // Set summary result
-  summaryResult.value = result;
-  void translateSummary(result);
+  if (props.article?.id === article.id && result) {
+    summaryResult.value = result;
+    void translateSummary(result);
+  }
 }
 
 // Check if should auto-generate summary
@@ -502,8 +512,39 @@ const shouldWaitForFullContentBeforeSummary = computed(() => {
   if (!shouldAutoGen) return false;
 
   // If summary is auto-generated and auto-expand content is enabled, wait for full content
-  return shouldAutoExpandContent.value;
+  return shouldAutoExpandContent.value && !fullArticleFetchFinished.value;
 });
+
+watch(
+  () =>
+    [
+      props.article?.id,
+      displayContent.value,
+      props.isLoadingContent,
+      summaryEnabled.value,
+      summaryProvider.value,
+      summaryTriggerMode.value,
+      fullArticleContent.value,
+      fullArticleFetchFinished.value,
+    ] as const,
+  () => {
+    const article = props.article;
+    if (
+      !article ||
+      props.isLoadingContent ||
+      !displayContent.value.trim() ||
+      !shouldAutoGenerateSummary() ||
+      article.summary?.trim() ||
+      summaryResult.value ||
+      isLoadingSummary.value
+    ) {
+      return;
+    }
+    if (shouldWaitForFullContentBeforeSummary.value && !fullArticleContent.value) return;
+    void generateSummary(article);
+  },
+  { flush: 'post' }
+);
 
 // Translate title
 async function translateTitle(article: Article, force = false) {
@@ -1018,10 +1059,11 @@ watch(
         if (props.article.summary && props.article.summary.trim() !== '') {
           // Load the cached summary by calling API to get HTML
           // Don't use on-the-fly summarization, let backend convert cached markdown to HTML
-          const result = await generateSummaryComposable(props.article, '', false);
+          const article = props.article;
+          const result = await generateSummaryComposable(article, '', false);
 
           // Set summary result
-          if (result) {
+          if (result && props.article?.id === article.id) {
             summaryResult.value = result;
             void translateSummary(result);
           }
@@ -1121,10 +1163,11 @@ onMounted(async () => {
     // Check for cached summary first
     if (props.article.summary && props.article.summary.trim() !== '') {
       // Load the cached summary by calling API to get HTML
-      const result = await generateSummaryComposable(props.article, '', false);
+      const article = props.article;
+      const result = await generateSummaryComposable(article, '', false);
 
       // Set summary result
-      if (result) {
+      if (result && props.article?.id === article.id) {
         summaryResult.value = result;
         void translateSummary(result);
       }

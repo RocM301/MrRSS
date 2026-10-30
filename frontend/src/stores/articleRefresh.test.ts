@@ -13,6 +13,38 @@ describe('article refresh integration', () => {
   beforeEach(() => setActivePinia(createPinia()));
   afterEach(() => vi.unstubAllGlobals());
 
+  it('announces new matching articles without replacing the reader and ignores obsolete results', async () => {
+    const store = useAppStore();
+    store.currentFeedId = 2;
+    store.searchQuery = 'Apple';
+    store.articles = [article(75)];
+    store.currentArticleId = 75;
+    const originalArticles = store.articles;
+    let finish!: (value: Response) => void;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response([article(76), article(75)]))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await store.scheduleBackgroundListRefresh();
+    expect(store.articles).toBe(originalArticles);
+    expect(store.currentArticleId).toBe(75);
+    expect(store.newArticlesCount).toBe(1);
+    expect(store.pendingListRefresh).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toContain('feed_id=2');
+    expect(fetchMock.mock.calls[0][0]).toContain('search_query=Apple');
+    const pending = store.scheduleBackgroundListRefresh();
+    store.currentFeedId = 3;
+    finish(response([article(77), article(78)]));
+    await pending;
+    expect(store.newArticlesCount).toBe(1);
+  });
+
   it('keeps the reader populated and restores the retained article to its page without duplicates', async () => {
     const store = useAppStore();
     store.articles = [article(75)];

@@ -1,8 +1,27 @@
 import { ref, onBeforeUnmount } from 'vue';
 
+// localStorage keys for persisting the user's manually-dragged panel widths so
+// they survive reloads, layout/settings changes and app restarts.
+const LS_SIDEBAR_WIDTH = 'mrrss.sidebarWidth';
+const LS_ARTICLE_WIDTH = 'mrrss.articleListWidth';
+
+function readSavedWidth(key: string): number | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useResizablePanels() {
-  const sidebarWidth = ref<number>(256);
-  const articleListWidth = ref<number>(350);
+  const savedSidebar = readSavedWidth(LS_SIDEBAR_WIDTH);
+  const savedArticle = readSavedWidth(LS_ARTICLE_WIDTH);
+
+  const sidebarWidth = ref<number>(Math.min(500, Math.max(180, savedSidebar ?? 256)));
+  const articleListWidth = ref<number>(savedArticle ?? 350);
   const isResizingSidebar = ref<boolean>(false);
   const isResizingArticleList = ref<boolean>(false);
   const compactMode = ref<boolean>(false);
@@ -15,7 +34,7 @@ export function useResizablePanels() {
   function restoreArticleListWidth(): void {
     const fallback = compactMode.value ? 500 : 350;
     try {
-      const saved = localStorage.getItem(storageKey());
+      const saved = localStorage.getItem(storageKey()) ?? localStorage.getItem(LS_ARTICLE_WIDTH);
       const width = saved === null ? fallback : Number(saved);
       articleListWidth.value =
         Number.isFinite(width) && width > 0
@@ -61,6 +80,12 @@ export function useResizablePanels() {
     document.body.style.userSelect = '';
     window.removeEventListener('mousemove', handleResizeSidebar);
     window.removeEventListener('mouseup', stopResizeSidebar);
+    // Persist the chosen sidebar width
+    try {
+      localStorage.setItem(LS_SIDEBAR_WIDTH, String(Math.round(sidebarWidth.value)));
+    } catch {
+      // ignore storage errors
+    }
   }
 
   // Article list resize handlers

@@ -7,6 +7,20 @@ All notable changes to MrRSS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.41-mod.9] - 2026-10-30
+
+### Personalized
+
+- Sync with upstream v1.3.41 while preserving RSS directory search and macOS-only releases.
+- Keep manual AI summary generation and retry available when automatic summarization fails.
+- Reject invalid AI title-translation explanations, clear bad cached translations, and retry with a clean translation.
+- Retry the selected AI profile once before trying other configured profiles; requests time out after 15 seconds and each new request starts with the selected profile.
+- Preserve MTranServer translation, brand and numeric protection, and rejection of translation commentary in Chinese titles.
+- Retry original-content extraction for empty articles, retain recovered content when switching articles, and ignore stale responses.
+- Keep article keyword search, scroll-only scrollbars, remembered panel widths, and background new-article notices.
+- Preserve macOS clipboard, OPML and native image-drag compatibility; do not render dollar prices as math.
+- Keep existing credentials and database compatibility alongside upstream sanitization, storage migration and server builds.
+
 ## [1.3.41] - 2026-10-25
 
 ### Added

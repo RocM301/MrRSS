@@ -99,6 +99,8 @@ type Defaults struct {
 	MinifluxServerUrl             string `json:"miniflux_server_url"`
 	MinifluxSyncOnStartup         bool   `json:"miniflux_sync_on_startup"`
 	MinifluxUsername              string `json:"miniflux_username"`
+	MtranEndpoint                 string `json:"mtran_endpoint"`
+	MtranToken                    string `json:"mtran_token"`
 	NetworkBandwidthMbps          string `json:"network_bandwidth_mbps"`
 	NetworkLatencyMs              string `json:"network_latency_ms"`
 	NetworkSpeed                  string `json:"network_speed"`
@@ -345,6 +347,10 @@ func GetString(key string) string {
 		return strconv.FormatBool(defaults.MinifluxSyncOnStartup)
 	case "miniflux_username":
 		return defaults.MinifluxUsername
+	case "mtran_endpoint":
+		return defaults.MtranEndpoint
+	case "mtran_token":
+		return defaults.MtranToken
 	case "network_bandwidth_mbps":
 		return defaults.NetworkBandwidthMbps
 	case "network_latency_ms":

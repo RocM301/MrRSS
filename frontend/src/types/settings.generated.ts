@@ -86,6 +86,8 @@ export interface SettingsData {
   miniflux_server_url: string;
   miniflux_sync_on_startup: boolean;
   miniflux_username: string;
+  mtran_endpoint: string;
+  mtran_token: string;
   network_bandwidth_mbps: string;
   network_latency_ms: string;
   network_speed: string;

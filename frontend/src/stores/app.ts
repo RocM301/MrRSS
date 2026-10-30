@@ -139,6 +139,10 @@ export interface AppState {
   page: Ref<number>;
   hasMore: Ref<boolean>;
   searchQuery: Ref<string>;
+  pendingListRefresh: Ref<boolean>;
+  newArticlesCount: Ref<number>;
+  flushPendingListRefresh: () => Promise<void>;
+  scheduleBackgroundListRefresh: () => Promise<void>;
   themePreference: Ref<ThemePreference>;
   theme: Ref<Theme>;
   refreshProgress: Ref<RefreshProgress>;
@@ -212,6 +216,67 @@ export const useAppStore = defineStore('app', () => {
   const page = ref<number>(1);
   const hasMore = ref<boolean>(true);
   const searchQuery = ref<string>('');
+  const pendingListRefresh = ref(false);
+  const newArticlesCount = ref(0);
+  async function scheduleBackgroundListRefresh() {
+    const requestId = latestArticlesRequestId;
+    const selection = JSON.stringify([
+      currentFilter.value,
+      currentFeedId.value,
+      currentCategory.value,
+      searchQuery.value,
+      articleSortOrder.value,
+      articleGroupBy.value,
+      showOnlyUnread.value,
+    ]);
+    try {
+      const params = new URLSearchParams({
+        page: '1',
+        limit: '50',
+        filter: currentFilter.value,
+        sort_order: articleSortOrder.value,
+        group_by: articleGroupBy.value,
+      });
+      if (
+        showOnlyUnread.value &&
+        currentFilter.value !== 'unread' &&
+        currentFilter.value !== 'favorites'
+      )
+        params.set('only_unread', 'true');
+      if (currentFeedId.value) params.set('feed_id', String(currentFeedId.value));
+      if (currentCategory.value !== null) params.set('category', currentCategory.value);
+      if (searchQuery.value.trim()) params.set('search_query', searchQuery.value.trim());
+      const response = await fetch('/api/articles?' + params);
+      if (!response.ok) return;
+      const latest: Article[] = await response.json();
+      if (
+        !Array.isArray(latest) ||
+        requestId !== latestArticlesRequestId ||
+        selection !==
+          JSON.stringify([
+            currentFilter.value,
+            currentFeedId.value,
+            currentCategory.value,
+            searchQuery.value,
+            articleSortOrder.value,
+            articleGroupBy.value,
+            showOnlyUnread.value,
+          ])
+      )
+        return;
+      const ids = new Set(articles.value.map((a) => a.id));
+      newArticlesCount.value = latest.filter((a) => !ids.has(a.id)).length;
+      pendingListRefresh.value = newArticlesCount.value > 0;
+    } catch {
+      /* Keep the current article list when a background refresh fails. */
+    }
+  }
+  async function flushPendingListRefresh() {
+    pendingListRefresh.value = false;
+    newArticlesCount.value = 0;
+    await fetchArticles();
+  }
+
   const themePreference = ref<ThemePreference>(
     (localStorage.getItem('themePreference') as ThemePreference) || 'auto'
   );
@@ -334,6 +399,10 @@ export const useAppStore = defineStore('app', () => {
     if (isLoading.value && (append || preserveExisting === true)) return;
 
     const requestId = ++latestArticlesRequestId;
+    if (!append) {
+      pendingListRefresh.value = false;
+      newArticlesCount.value = 0;
+    }
     const previousArticles = articles.value;
 
     // If not appending, reset to page 1 and clear articles
@@ -351,6 +420,8 @@ export const useAppStore = defineStore('app', () => {
     let url = `/api/articles?page=${page.value}&limit=${limit}`;
     url += `&sort_order=${articleSortOrder.value}`;
     url += `&group_by=${articleGroupBy.value}`;
+    if (searchQuery.value.trim())
+      url += `&search_query=${encodeURIComponent(searchQuery.value.trim())}`;
     if (currentFilter.value) url += `&filter=${currentFilter.value}`;
     if (
       showOnlyUnread.value &&
@@ -713,7 +784,7 @@ export const useAppStore = defineStore('app', () => {
 
         // Still refresh feeds and articles to get any updates from FreshRSS sync
         fetchFeeds();
-        fetchArticles(false, true);
+        scheduleBackgroundListRefresh();
         fetchUnreadCounts();
 
         // Notify components that settings have been updated
@@ -802,7 +873,7 @@ export const useAppStore = defineStore('app', () => {
           // Replacing the viewport for each saved feed starts translations of rows
           // that the next batch immediately replaces, interrupting ongoing reading.
           displayedArticleRevision = revision;
-          await Promise.all([fetchFeeds(), fetchArticles(false, true)]);
+          await Promise.all([fetchFeeds(), scheduleBackgroundListRefresh()]);
           if (!controller.signal.aborted) {
             if (!active) clearArticleContentCache();
             window.dispatchEvent(
@@ -864,7 +935,7 @@ export const useAppStore = defineStore('app', () => {
             lastTimes.set(provider, { time, isSyncing });
           }
           if (changed && !controller.signal.aborted)
-            await Promise.all([fetchFeeds(), fetchArticles(false, true)]);
+            await Promise.all([fetchFeeds(), scheduleBackgroundListRefresh()]);
         } catch {
           /* Retry on the next interval, unless stopped. */
         } finally {
@@ -1034,6 +1105,10 @@ export const useAppStore = defineStore('app', () => {
     page,
     hasMore,
     searchQuery,
+    pendingListRefresh,
+    newArticlesCount,
+    flushPendingListRefresh,
+    scheduleBackgroundListRefresh,
     themePreference,
     theme,
     refreshProgress,

@@ -11,6 +11,10 @@ func TestReplaceAppImage(t *testing.T) {
 	for _, scenario := range []string{"success", "invalid", "cancelled"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := t.TempDir()
+			dir, err := filepath.EvalSymlinks(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
 			target := filepath.Join(dir, "installed with spaces.AppImage")
 			download := filepath.Join(t.TempDir(), "new.AppImage")
 			payload := []byte("\x7fELF\x02\x01\x01\x00AI\x02new-image")

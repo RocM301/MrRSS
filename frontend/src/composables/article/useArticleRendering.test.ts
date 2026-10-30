@@ -26,6 +26,13 @@ describe('useArticleRendering', () => {
   });
 
   describe('renderMathFormulas', () => {
+    it('preserves dollar prices instead of treating them as math delimiters', () => {
+      const { renderMathFormulas } = useArticleRendering();
+      container.innerHTML = '<p>MacBook Air: $1,299, up from $1,099 (+$200)</p>';
+      const originalHTML = container.innerHTML;
+      renderMathFormulas(container);
+      expect(container.innerHTML).toBe(originalHTML);
+    });
     it('should render inline math formulas', () => {
       const { renderMathFormulas } = useArticleRendering();
 

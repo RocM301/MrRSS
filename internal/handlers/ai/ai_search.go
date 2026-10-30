@@ -185,12 +185,18 @@ func HandleAISearch(h *core.Handler, w http.ResponseWriter, r *http.Request) {
 
 	// Get AI settings - try ProfileProvider first
 	var apiKey, endpoint, model string
+	var fallbackConfigs []ai.ClientConfig
+	var profileHeaders string
 	if h.AIProfileProvider != nil {
 		cfg, err := h.AIProfileProvider.GetConfigForFeature(ai.FeatureSearch)
 		if err == nil && cfg != nil && (cfg.APIKey != "" || cfg.Endpoint != "") {
 			apiKey = cfg.APIKey
 			endpoint = cfg.Endpoint
 			model = cfg.Model
+			profileHeaders = cfg.CustomHeaders
+			if configs, configErr := h.AIProfileProvider.GetConfigsForFeature(ai.FeatureSearch); configErr == nil && len(configs) > 1 {
+				fallbackConfigs = configs[1:]
+			}
 			log.Printf("[AI Search] Using AI profile for search (endpoint: %s, model: %s)", ai.RedactEndpoint(endpoint), model)
 		}
 	}
@@ -236,10 +242,12 @@ func HandleAISearch(h *core.Handler, w http.ResponseWriter, r *http.Request) {
 	httpClient.Timeout = 30 * time.Second
 
 	clientConfig := ai.ClientConfig{
-		APIKey:   apiKey,
-		Endpoint: endpoint,
-		Model:    model,
-		Timeout:  30 * time.Second,
+		APIKey:          apiKey,
+		Endpoint:        endpoint,
+		Model:           model,
+		Timeout:         30 * time.Second,
+		FallbackConfigs: fallbackConfigs,
+		CustomHeaders:   profileHeaders,
 	}
 	client := ai.NewClientWithHTTPClient(clientConfig, httpClient)
 

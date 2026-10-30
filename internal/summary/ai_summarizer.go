@@ -26,6 +26,15 @@ type AISummarizer struct {
 	clientError   error
 }
 
+// SetFallbackConfigs configures alternate profiles used after two failed
+// attempts with the primary profile.
+func (s *AISummarizer) SetFallbackConfigs(configs []ai.ClientConfig) {
+	if len(configs) == 0 {
+		return
+	}
+	s.client.SetFallbackConfigs(configs)
+}
+
 // DBInterface defines the minimal database interface needed for proxy settings
 type DBInterface interface {
 	GetSetting(key string) (string, error)

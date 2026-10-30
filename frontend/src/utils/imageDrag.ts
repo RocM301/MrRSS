@@ -7,6 +7,8 @@ export function setImageDragData(
   image: HTMLImageElement,
   referer?: string
 ): void {
+  // Preserve WKWebView's native file promise when dropping images into Finder.
+  if (!/Chrome\//.test(navigator.userAgent)) return;
   if (!event.dataTransfer) return;
   try {
     const source = new URL(image.currentSrc || image.src, window.location.href);

@@ -95,7 +95,6 @@ onUnmounted(() => {
 const shouldShowManualTrigger = computed(() => {
   return (
     props.summaryProvider === 'ai' &&
-    props.summaryTriggerMode === 'manual' &&
     !props.summaryResult &&
     !props.isLoadingSummary &&
     !props.isLoadingContent
@@ -103,7 +102,13 @@ const shouldShowManualTrigger = computed(() => {
 });
 
 const shouldReserveAutoSummary = computed(() => {
-  if (props.summaryResult || props.isLoadingSummary || props.isLoadingContent) return false;
+  if (
+    props.summaryResult ||
+    props.isLoadingSummary ||
+    props.isLoadingContent ||
+    shouldShowManualTrigger.value
+  )
+    return false;
   if (props.summaryProvider === 'ai') return props.summaryTriggerMode === 'auto';
   return props.summaryProvider === 'local' || props.summaryProvider === 'rss';
 });
@@ -326,6 +331,13 @@ async function handleSummaryLinkClick(event: MouseEvent) {
           <div class="text-xs text-text-secondary text-center max-w-xs break-words">
             {{ summaryResult.error }}
           </div>
+          <button
+            class="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors"
+            @click.stop="handleGenerateSummary"
+          >
+            <PhArrowsClockwise :size="16" />
+            <span class="text-sm">{{ t('setting.content.retrySummary') }}</span>
+          </button>
         </div>
 
         <!-- No Summary Available -->

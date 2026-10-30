@@ -172,6 +172,8 @@ CRITICAL RULES:
 3. Maintain EXACT indentation levels for nested lists
 4. Do NOT translate markdown syntax, only translate the text content
 5. Output ONLY the translated markdown, nothing else
+6. Never explain, summarize, identify the language, or say that translation is unnecessary
+7. If text is already in the target language, preserve it exactly without adding any explanation
 
 Example:
 Input:

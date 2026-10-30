@@ -96,6 +96,19 @@ func (f *Fetcher) processArticles(feed models.Feed, items []*gofeed.Item) []*Art
 			title = generateTitleFromContent(content)
 		}
 
+		// Decode HTML entities in the title until stable. Titles are rendered as
+		// plain text in the UI, so any leftover entity shows literally. Some
+		// feeds double-encode (e.g. The Verge sends "AT&amp;#038;T"); gofeed
+		// decodes one level, leaving "AT&#038;T", so we decode again. The loop
+		// is bounded and stops once decoding no longer changes the string.
+		for i := 0; i < 3; i++ {
+			decoded := html.UnescapeString(title)
+			if decoded == title {
+				break
+			}
+			title = decoded
+		}
+
 		// IMPORTANT: Translation should NOT be done here during feed refresh!
 		// Translation is an expensive operation that should only happen on-demand:
 		// 1. When article enters viewport (lazy loading)

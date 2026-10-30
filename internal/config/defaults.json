@@ -80,6 +80,8 @@
   "miniflux_server_url": "",
   "miniflux_sync_on_startup": false,
   "miniflux_username": "",
+  "mtran_endpoint": "",
+  "mtran_token": "",
   "network_bandwidth_mbps": "0",
   "network_latency_ms": "0",
   "network_speed": "medium",

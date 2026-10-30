@@ -5,6 +5,7 @@ import type { Article } from '@/types/models';
 import { useArticleDateFormat } from '@/composables/article/useArticleDateFormat';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/app';
+import { isInvalidArticleTranslation } from '@/utils/articleTranslation';
 
 interface Props {
   article: Article;
@@ -39,7 +40,8 @@ const showBilingualTitle = computed(() => {
   return (
     props.translationEnabled &&
     props.translatedTitle &&
-    props.translatedTitle !== props.article?.title
+    props.translatedTitle !== props.article?.title &&
+    !isInvalidArticleTranslation(props.translatedTitle)
   );
 });
 

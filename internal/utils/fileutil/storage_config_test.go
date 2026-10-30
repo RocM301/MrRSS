@@ -9,8 +9,17 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func canonicalTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func TestStorageMigrationPreservesSQLiteRecords(t *testing.T) {
-	source, target := t.TempDir(), t.TempDir()
+	source, target := canonicalTempDir(t), canonicalTempDir(t)
 	db, err := sql.Open("sqlite", filepath.Join(source, "rss.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +55,7 @@ func TestStorageMigrationPreservesSQLiteRecords(t *testing.T) {
 }
 
 func TestStorageMigrationPreservesFilesAndRejectsOccupiedTarget(t *testing.T) {
-	root := t.TempDir()
+	root := canonicalTempDir(t)
 	source := filepath.Join(root, "old")
 	target := filepath.Join(root, "新的目录 # %")
 	os.MkdirAll(filepath.Join(source, "scripts"), 0700)
@@ -78,7 +87,7 @@ func TestStorageMigrationPreservesFilesAndRejectsOccupiedTarget(t *testing.T) {
 func TestStorageScheduleDoesNotSwitchLiveDirectory(t *testing.T) {
 	previous, managed, configFile := customDataDir, desktopStorageManaged, storageConfigFile
 	t.Cleanup(func() { customDataDir, desktopStorageManaged, storageConfigFile = previous, managed, configFile })
-	source, target := t.TempDir(), t.TempDir()
+	source, target := canonicalTempDir(t), canonicalTempDir(t)
 	customDataDir, desktopStorageManaged, storageConfigFile = source, true, filepath.Join(t.TempDir(), "storage.json")
 	cfg, err := ScheduleDataDirectory(target)
 	if err != nil {
@@ -131,7 +140,7 @@ func TestDesktopStorageStartupMigrationAndFallback(t *testing.T) {
 	t.Setenv("APPDATA", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
-	source, target := t.TempDir(), t.TempDir()
+	source, target := canonicalTempDir(t), canonicalTempDir(t)
 	os.WriteFile(filepath.Join(source, "rss.db"), []byte("preserved"), 0600)
 	path, err := storageConfigPath()
 	if err != nil {

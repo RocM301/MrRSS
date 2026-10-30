@@ -110,18 +110,24 @@ describe('full article loading', () => {
     f.wrapper.unmount();
   });
   it('allows manual retry after automatic failure without a retry loop', async () => {
+    vi.useFakeTimers();
     const fetch = vi
       .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: false })
       .mockResolvedValueOnce({ ok: false })
       .mockResolvedValue(response('Recovered'));
     vi.stubGlobal('fetch', fetch);
     const f = fixture();
     await flushPromises();
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(f.onError).not.toHaveBeenCalled();
     await f.result.fetchFullArticle();
     expect(f.result.fullArticleContent.value).toBe('Recovered');
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
     f.wrapper.unmount();
+    vi.useRealTimers();
   });
   it('honors disabled auto expansion and aborts on unmount', async () => {
     const fetch = vi.fn().mockResolvedValue(response('Manual'));

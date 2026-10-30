@@ -3,8 +3,10 @@ package translation
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"MrRSS/internal/ai"
 	"MrRSS/internal/handlers/core"
@@ -67,14 +69,21 @@ func HandleTranslateArticle(h *core.Handler, w http.ResponseWriter, r *http.Requ
 	article, err := h.DB.GetArticleByID(req.ArticleID)
 	if err == nil && article != nil {
 		if article.TranslatedTitle != "" && article.TranslatedTitle != article.Title {
-			// Translation already exists and is different from original
-			response.JSON(w, map[string]interface{}{
-				"translated_title": article.TranslatedTitle,
-				"limit_reached":    false,
-				"skipped":          true, // Indicate translation was skipped (from cache)
-				"cached":           true,
-			})
-			return
+			if isTranslationMetaResponse(article.TranslatedTitle) {
+				if clearErr := h.DB.UpdateArticleTranslation(req.ArticleID, ""); clearErr != nil {
+					response.Error(w, clearErr, http.StatusInternalServerError)
+					return
+				}
+			} else {
+				// Translation already exists and is different from original
+				response.JSON(w, map[string]interface{}{
+					"translated_title": article.TranslatedTitle,
+					"limit_reached":    false,
+					"skipped":          true, // Indicate translation was skipped (from cache)
+					"cached":           true,
+				})
+				return
+			}
 		}
 	}
 
@@ -142,6 +151,9 @@ func HandleTranslateArticle(h *core.Handler, w http.ResponseWriter, r *http.Requ
 
 			// Use markdown-preserving translation for better list structure
 			translatedTitle, translateErr = translation.TranslateMarkdownPreservingStructureContext(r.Context(), req.Title, h.Translator, req.TargetLang)
+			if translateErr == nil && isTranslationMetaResponse(translatedTitle) {
+				translateErr = fmt.Errorf("AI returned an explanation instead of a translation")
+			}
 
 			// If AI fails, fallback to Google Translate
 			if translateErr != nil && r.Context().Err() == nil && !translation.IsRateLimited(translateErr) {
@@ -192,6 +204,17 @@ func HandleTranslateArticle(h *core.Handler, w http.ResponseWriter, r *http.Requ
 		"limit_reached":    limitReached,
 		"skipped":          false, // Translation was performed
 	})
+}
+
+func isTranslationMetaResponse(text string) bool {
+	value := strings.ToLower(strings.TrimSpace(text))
+	markers := []string{"无需翻译", "不需要翻译", "已经是简体中文", "已经是繁体中文", "原文：", "原文:", "already in simplified chinese", "already in traditional chinese", "no translation is needed", "no translation needed", "the original text is", "here is the translation"}
+	for _, marker := range markers {
+		if strings.Contains(value, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func translationError(w http.ResponseWriter, err error) {

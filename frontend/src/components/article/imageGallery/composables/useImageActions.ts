@@ -1,6 +1,7 @@
 import { useAppStore } from '@/stores/app';
 import { useI18n } from 'vue-i18n';
 import { openInBrowser } from '@/utils/browser';
+import { copyText } from '@/utils/clipboard';
 import type { Article } from '@/types/models';
 import type { ImageActionsReturn } from '../types';
 
@@ -193,13 +194,11 @@ export function useImageActions(): ImageActionsReturn {
    * @param article - The article to copy title from
    */
   async function copyArticleTitle(article: Article): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(article.title);
-      window.showToast(t('common.toast.copiedToClipboard'), 'success');
-    } catch (error) {
-      console.error('Failed to copy title:', error);
-      window.showToast(t('common.errors.failedToCopy'), 'error');
-    }
+    const ok = await copyText(article.title);
+    window.showToast(
+      ok ? t('common.toast.copiedToClipboard') : t('common.errors.failedToCopy'),
+      ok ? 'success' : 'error'
+    );
   }
 
   /**
@@ -207,13 +206,11 @@ export function useImageActions(): ImageActionsReturn {
    * @param article - The article to copy link from
    */
   async function copyArticleLink(article: Article): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(article.url);
-      window.showToast(t('common.toast.copiedToClipboard'), 'success');
-    } catch (error) {
-      console.error('Failed to copy link:', error);
-      window.showToast(t('common.errors.failedToCopy'), 'error');
-    }
+    const ok = await copyText(article.url);
+    window.showToast(
+      ok ? t('common.toast.copiedToClipboard') : t('common.errors.failedToCopy'),
+      ok ? 'success' : 'error'
+    );
   }
 
   return {

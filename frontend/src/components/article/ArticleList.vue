@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, type Ref } from 'vue';
 import {
   PhArrowClockwise,
+  PhMagnifyingGlass,
   PhList,
   PhSpinner,
   PhTrash,
@@ -53,6 +54,26 @@ const { t, locale } = useI18n();
 const { settings } = useSettings();
 
 const listRef: Ref<HTMLDivElement | null> = ref(null);
+const showArticleSearch = ref(false);
+const articleSearchDraft = ref(store.searchQuery);
+const searchInput = ref<HTMLInputElement | null>(null);
+let scrollbarTimer: ReturnType<typeof setTimeout> | null = null;
+const isListScrolling = ref(false);
+async function toggleArticleSearch() {
+  showArticleSearch.value = !showArticleSearch.value;
+  if (showArticleSearch.value) {
+    await nextTick();
+    searchInput.value?.focus();
+  }
+}
+async function applyArticleSearch() {
+  store.searchQuery = articleSearchDraft.value.trim();
+  if (activeFilters.value.length) await fetchFilteredArticles(activeFilters.value, false);
+  else await store.fetchArticles();
+}
+onBeforeUnmount(() => {
+  if (scrollbarTimer) clearTimeout(scrollbarTimer);
+});
 const defaultViewMode = ref<'original' | 'rendered' | 'external'>('original');
 const showFilterModal = ref(false);
 const reportArticles = ref<Article[] | null>(null);
@@ -944,6 +965,11 @@ const SCROLL_THRESHOLD = 400; // Increased from 200 to 400 for better UX
 // Keeps the rendered window in sync on every scroll event; the load-more check
 // stays throttled inside handleScroll.
 function onListScroll(event: Event): void {
+  isListScrolling.value = true;
+  if (scrollbarTimer) clearTimeout(scrollbarTimer);
+  scrollbarTimer = setTimeout(() => {
+    isListScrolling.value = false;
+  }, 700);
   updateListWindow();
   handleScroll(event);
 }
@@ -1355,6 +1381,16 @@ async function reloadArticleOrder(): Promise<void> {
               :weight="store.showOnlyUnread ? 'fill' : 'regular'"
             />
           </button>
+          <button
+            class="text-text-secondary hover:text-accent p-1 sm:p-1.5 rounded"
+            :class="{ 'text-accent': showArticleSearch || store.searchQuery }"
+            :title="t('article.search.buttonTitle')"
+            :aria-label="t('article.search.button')"
+            :aria-pressed="showArticleSearch"
+            @click="toggleArticleSearch"
+          >
+            <PhMagnifyingGlass :size="18" />
+          </button>
           <ArticleListMoreMenu
             :sort-order="store.articleSortOrder"
             :group-by="store.articleGroupBy"
@@ -1552,6 +1588,33 @@ async function reloadArticleOrder(): Promise<void> {
       </div>
     </div>
 
+    <form
+      v-if="showArticleSearch"
+      class="flex items-center gap-2 border-b border-border p-2"
+      @submit.prevent="applyArticleSearch"
+    >
+      <input
+        ref="searchInput"
+        v-model="articleSearchDraft"
+        type="search"
+        class="min-w-0 flex-1 bg-bg-secondary rounded px-3 py-2 text-sm"
+        :placeholder="t('article.search.placeholder')"
+        :aria-label="t('article.search.button')"
+        @search="applyArticleSearch"
+      />
+      <button type="submit" class="p-2 text-accent" :title="t('article.search.button')">
+        <PhMagnifyingGlass :size="18" />
+      </button>
+    </form>
+    <button
+      v-if="store.pendingListRefresh"
+      class="flex items-center justify-center gap-2 border-b border-border p-2 text-accent text-sm"
+      @click="store.flushPendingListRefresh()"
+    >
+      <PhArrowClockwise :size="16" />{{
+        t('article.list.newArticles', { count: store.newArticlesCount })
+      }}
+    </button>
     <!-- AI Search Bar -->
     <TranslationQueueStatus v-if="translationSettings.enabled" class="px-3 py-2" />
 
@@ -1573,7 +1636,7 @@ async function reloadArticleOrder(): Promise<void> {
       <div
         ref="listRef"
         class="h-full overflow-y-scroll article-list-scroll"
-        :class="{ 'pointer-events-none': showingPrevious }"
+        :class="{ 'pointer-events-none': showingPrevious, 'is-scrolling': isListScrolling }"
         :inert="showingPrevious || undefined"
         @scroll="onListScroll"
       >
@@ -1970,6 +2033,18 @@ async function reloadArticleOrder(): Promise<void> {
 }
 
 /* Optimize scrolling performance */
+.article-list-scroll {
+  scrollbar-color: transparent transparent;
+}
+.article-list-scroll.is-scrolling {
+  scrollbar-color: var(--color-text-secondary) transparent;
+}
+.article-list-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.article-list-scroll.is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--color-text-secondary);
+}
 .article-list-scroll {
   /* Enable GPU acceleration for smooth scrolling */
   transform: translateZ(0);

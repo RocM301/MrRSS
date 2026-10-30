@@ -65,9 +65,10 @@ func (db *DB) GetAIProfile(id int64) (*models.AIProfile, error) {
 	// Decrypt API key
 	if encryptedKey != "" {
 		decrypted, err := crypto.Decrypt(encryptedKey)
-		if err == nil {
-			profile.APIKey = decrypted
+		if err != nil {
+			return nil, fmt.Errorf("decrypt API key for AI profile %d: %w", profile.ID, err)
 		}
+		profile.APIKey = decrypted
 	}
 
 	return &profile, nil
@@ -100,9 +101,10 @@ func (db *DB) GetAllAIProfiles() ([]models.AIProfile, error) {
 		// Decrypt API key
 		if encryptedKey != "" {
 			decrypted, err := crypto.Decrypt(encryptedKey)
-			if err == nil {
-				profile.APIKey = decrypted
+			if err != nil {
+				return nil, fmt.Errorf("decrypt API key for AI profile %d: %w", profile.ID, err)
 			}
+			profile.APIKey = decrypted
 		}
 
 		profiles = append(profiles, profile)
@@ -140,6 +142,61 @@ func (db *DB) GetAllAIProfilesWithoutKeys() ([]models.AIProfile, error) {
 	return profiles, nil
 }
 
+// GetAIProfileWithoutKey retrieves an AI profile by ID without decrypting or
+// returning its API key. It is used by settings screens so a damaged encrypted
+// key does not prevent the user from editing the profile and replacing it.
+func (db *DB) GetAIProfileWithoutKey(id int64) (*models.AIProfile, error) {
+	var profile models.AIProfile
+	err := db.QueryRow(`
+		SELECT id, name, endpoint, model, custom_headers, is_default, created_at, updated_at
+		FROM ai_profiles WHERE id = ?
+	`, id).Scan(
+		&profile.ID, &profile.Name, &profile.Endpoint,
+		&profile.Model, &profile.CustomHeaders, &profile.IsDefault,
+		&profile.CreatedAt, &profile.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("query ai profile without key: %w", err)
+	}
+	return &profile, nil
+}
+
+// AIProfileExists reports whether an AI profile exists without decrypting its
+// API key. This is useful when a damaged old key needs to be overwritten.
+func (db *DB) AIProfileExists(id int64) (bool, error) {
+	var exists int
+	err := db.QueryRow(`SELECT 1 FROM ai_profiles WHERE id = ?`, id).Scan(&exists)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("query ai profile existence: %w", err)
+	}
+	return true, nil
+}
+
+// AIProfileAPIKeyDecryptable reports whether the stored API key is either empty
+// or decryptable. A false result means the encrypted value is unusable and
+// should be replaced or cleared.
+func (db *DB) AIProfileAPIKeyDecryptable(id int64) (bool, error) {
+	var encryptedKey string
+	err := db.QueryRow(`SELECT api_key FROM ai_profiles WHERE id = ?`, id).Scan(&encryptedKey)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("query ai profile api key: %w", err)
+	}
+	if encryptedKey == "" {
+		return true, nil
+	}
+	_, err = crypto.Decrypt(encryptedKey)
+	return err == nil, nil
+}
+
 // UpdateAIProfile updates an existing AI profile
 func (db *DB) UpdateAIProfile(profile *models.AIProfile) error {
 	// Encrypt API key before storing
@@ -162,6 +219,25 @@ func (db *DB) UpdateAIProfile(profile *models.AIProfile) error {
 	}
 
 	// If this is set as default, unset other defaults
+	if profile.IsDefault {
+		_, _ = db.Exec(`UPDATE ai_profiles SET is_default = 0 WHERE id != ?`, profile.ID)
+	}
+
+	return nil
+}
+
+// UpdateAIProfilePreservingKey updates an AI profile while preserving the
+// stored API key ciphertext. It intentionally does not decrypt the existing key.
+func (db *DB) UpdateAIProfilePreservingKey(profile *models.AIProfile) error {
+	_, err := db.Exec(`
+		UPDATE ai_profiles
+		SET name = ?, endpoint = ?, model = ?, custom_headers = ?, is_default = ?, updated_at = ?
+		WHERE id = ?
+	`, profile.Name, profile.Endpoint, profile.Model, profile.CustomHeaders, profile.IsDefault, time.Now(), profile.ID)
+	if err != nil {
+		return fmt.Errorf("update ai profile preserving key: %w", err)
+	}
+
 	if profile.IsDefault {
 		_, _ = db.Exec(`UPDATE ai_profiles SET is_default = 0 WHERE id != ?`, profile.ID)
 	}
@@ -201,9 +277,10 @@ func (db *DB) GetDefaultAIProfile() (*models.AIProfile, error) {
 	// Decrypt API key
 	if encryptedKey != "" {
 		decrypted, err := crypto.Decrypt(encryptedKey)
-		if err == nil {
-			profile.APIKey = decrypted
+		if err != nil {
+			return nil, fmt.Errorf("decrypt API key for AI profile %d: %w", profile.ID, err)
 		}
+		profile.APIKey = decrypted
 	}
 
 	return &profile, nil
@@ -231,9 +308,10 @@ func (db *DB) getFirstAIProfile() (*models.AIProfile, error) {
 	// Decrypt API key
 	if encryptedKey != "" {
 		decrypted, err := crypto.Decrypt(encryptedKey)
-		if err == nil {
-			profile.APIKey = decrypted
+		if err != nil {
+			return nil, fmt.Errorf("decrypt API key for AI profile %d: %w", profile.ID, err)
 		}
+		profile.APIKey = decrypted
 	}
 
 	return &profile, nil

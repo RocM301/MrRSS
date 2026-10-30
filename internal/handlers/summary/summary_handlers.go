@@ -145,6 +145,7 @@ func HandleSummarizeArticle(h *core.Handler, w http.ResponseWriter, r *http.Requ
 
 			// Try to get AI config from ProfileProvider first
 			var apiKey, endpoint, model, customHeaders string
+			var fallbackConfigs []ai.ClientConfig
 			hasProfile := false
 			if h.AIProfileProvider != nil {
 				profile, err := h.AIProfileProvider.GetProfileForFeature(ai.FeatureSummary)
@@ -154,6 +155,9 @@ func HandleSummarizeArticle(h *core.Handler, w http.ResponseWriter, r *http.Requ
 					endpoint = profile.Endpoint
 					model = profile.Model
 					customHeaders = profile.CustomHeaders
+					if configs, configErr := h.AIProfileProvider.GetConfigsForFeature(ai.FeatureSummary); configErr == nil && len(configs) > 1 {
+						fallbackConfigs = configs[1:]
+					}
 					log.Printf("AI summary profile selected endpoint=%s model=%s", ai.RedactEndpoint(endpoint), model)
 				}
 			}
@@ -183,6 +187,7 @@ func HandleSummarizeArticle(h *core.Handler, w http.ResponseWriter, r *http.Requ
 			if customHeaders != "" {
 				aiSummarizer.SetCustomHeaders(customHeaders)
 			}
+			aiSummarizer.SetFallbackConfigs(fallbackConfigs)
 			if language != "" {
 				aiSummarizer.SetLanguage(language)
 			}

@@ -122,8 +122,11 @@ func HandleTestAIConfig(h *core.Handler, w http.ResponseWriter, r *http.Request)
 	}
 	client := ai.NewClientWithHTTPClient(clientConfig, httpClient)
 
-	// Try a simple test request
-	_, err = client.Request("", "test")
+	// Relay endpoints may reject optional sampling and token parameters.
+	_, err = client.RequestWithConfigContext(r.Context(), ai.RequestConfig{
+		Model:    model,
+		Messages: []map[string]string{{"role": "user", "content": "ping"}},
+	})
 
 	if err != nil {
 		publicErr := ai.ClassifyUserFacingError(err)

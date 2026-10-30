@@ -60,6 +60,13 @@ func (f *Factory) SetProfileProvider(profileProvider *ai.ProfileProvider) {
 // Create 创建翻译提供商实例
 func (f *Factory) Create(providerType ProviderType) (Provider, error) {
 	switch providerType {
+	case ProviderMTran:
+		endpoint, _ := f.settingsProvider.GetSetting("mtran_endpoint")
+		token, _ := f.settingsProvider.GetEncryptedSetting("mtran_token")
+		if endpoint == "" {
+			return nil, fmt.Errorf("MTranServer endpoint is required")
+		}
+		return &mtranProvider{translator: NewMTranTranslator(endpoint, token)}, nil
 	case ProviderMicrosoftEdge:
 		return newEdgeProvider(f.settingsProvider)
 	case ProviderGoogle:
@@ -146,6 +153,7 @@ func (f *Factory) createAIProvider(config *aiConfig) Provider {
 	if config.CustomHeaders != "" {
 		translator.SetCustomHeaders(config.CustomHeaders)
 	}
+	translator.SetFallbackConfigs(config.FallbackConfigs)
 	return &aiProvider{translator: translator}
 }
 
@@ -196,14 +204,19 @@ func (f *Factory) loadAIConfig() (*aiConfig, error) {
 	if profileProvider != nil {
 		cfg, err := profileProvider.GetProfileForFeature(ai.FeatureTranslation)
 		if err == nil && cfg != nil {
+			var fallbacks []ai.ClientConfig
+			if configs, configErr := profileProvider.GetConfigsForFeature(ai.FeatureTranslation); configErr == nil && len(configs) > 1 {
+				fallbacks = configs[1:]
+			}
 			// Get system prompt from settings if not in profile
 			systemPrompt, _ := f.settingsProvider.GetSetting("ai_translation_prompt")
 			return &aiConfig{
-				APIKey:        cfg.APIKey,
-				Endpoint:      cfg.Endpoint,
-				Model:         cfg.Model,
-				SystemPrompt:  systemPrompt,
-				CustomHeaders: cfg.CustomHeaders,
+				APIKey:          cfg.APIKey,
+				Endpoint:        cfg.Endpoint,
+				Model:           cfg.Model,
+				SystemPrompt:    systemPrompt,
+				CustomHeaders:   cfg.CustomHeaders,
+				FallbackConfigs: fallbacks,
 			}, nil
 		}
 	}
@@ -268,11 +281,12 @@ type baiduConfig struct {
 }
 
 type aiConfig struct {
-	APIKey        string
-	Endpoint      string
-	Model         string
-	SystemPrompt  string
-	CustomHeaders string
+	APIKey          string
+	Endpoint        string
+	Model           string
+	SystemPrompt    string
+	CustomHeaders   string
+	FallbackConfigs []ai.ClientConfig
 }
 
 type microsoftConfig struct {

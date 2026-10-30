@@ -159,6 +159,11 @@ func migrateUniqueIDOnArticles(db *sql.DB) error {
 		log.Printf("Warning: Failed to migrate unique_id: %v", err)
 	}
 
+	// Older ALTER TABLE migrations may lack the unique constraint required by upserts.
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_unique_id ON articles(unique_id)`); err != nil {
+		log.Printf("Warning: Failed to create unique index on articles.unique_id: %v", err)
+	}
+
 	// Backfill published_at for articles that have NULL values
 	// Set to current time as fallback (article creation time is unknown)
 	result, err := db.Exec(`
